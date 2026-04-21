@@ -1,0 +1,10 @@
+/* Mlolongo — cool stone / teal accent */
+body[data-estate="mlolongo"] {
+    --accent: #2f5d56;
+    --accent-hover: #264a45;
+    --accent-soft: rgba(47, 93, 86, 0.14);
+}
+
+body[data-estate="mlolongo"] .page-hero::before {
+    background: radial-gradient(ellipse 90% 80% at 80% 0%, rgba(47, 93, 86, 0.12), transparent 55%);
+}

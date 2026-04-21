@@ -1,0 +1,10 @@
+/* Syokimau — warm green accent */
+body[data-estate="syokimau"] {
+    --accent: #3d6b47;
+    --accent-hover: #325a3b;
+    --accent-soft: rgba(61, 107, 71, 0.14);
+}
+
+body[data-estate="syokimau"] .page-hero::before {
+    background: radial-gradient(ellipse 90% 80% at 80% 0%, rgba(61, 107, 71, 0.12), transparent 55%);
+}

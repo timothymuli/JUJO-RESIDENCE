@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create tenant account | JUJO Residence</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="auth-page">
+    <header class="site-header">
+        <nav class="navbar container" aria-label="Primary">
+            <div class="logo">
+                <a href="index.html" class="logo__link">
+                    <span class="logo__name">JUJO Residence</span>
+                    <span class="logo__sub">Tenant registration</span>
+                </a>
+            </div>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+                <li><a href="login.html">Sign in</a></li>
+            </ul>
+            <div class="nav-extras">
+                <button type="button" class="btn-ghost" id="dark-mode-toggle">Theme</button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="auth-main">
+        <div class="auth-card" style="max-width:28rem;">
+            <div class="reg-steps" id="reg-steps">
+                <span class="is-active" data-step="1">1. Your details</span>
+                <span data-step="2">2. SMS code</span>
+            </div>
+            <h1>Create your account</h1>
+            <p class="lead" id="reg-lead">Same flow as most apps: your details, then a code we text to your Safaricom number.</p>
+            <p class="muted" id="reg-policy" style="font-size:0.85rem;margin-top:-0.5rem;"></p>
+
+            <form id="form-step1" class="form-stack">
+                <label>Full name <input type="text" name="full_name" required maxlength="120" autocomplete="name"></label>
+                <label>Email <input type="email" name="email" required autocomplete="email"></label>
+                <label>Mobile (Safaricom) <input type="tel" name="phone" required placeholder="07XX XXX XXX or 254…" autocomplete="tel"></label>
+                <label>Password <input type="password" name="password" required minlength="8" autocomplete="new-password"></label>
+                <label>I rent at
+                    <select name="property_slug" required>
+                        <option value="">Choose…</option>
+                        <option value="mlolongo">JUJO Heights — Mlolongo</option>
+                        <option value="syokimau">Blessed Haven — Syokimau (TPA Court back)</option>
+                    </select>
+                </label>
+                <button type="submit" class="btn" style="width:100%;max-width:32rem;">Send verification code</button>
+                <p id="msg1" class="form-msg"></p>
+            </form>
+
+            <form id="form-step2" class="form-stack" hidden>
+                <p class="muted" style="font-size:0.9rem;">Enter the 6-digit code we sent to <strong id="phone-display"></strong>.</p>
+                <label>Code <input type="text" name="otp" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="one-time-code"></label>
+                <input type="hidden" name="phone" id="otp-phone">
+                <button type="submit" class="btn" style="width:100%;max-width:32rem;">Verify &amp; finish</button>
+                <p id="msg2" class="form-msg"></p>
+                <button type="button" class="btn-ghost" id="back-step1" style="margin-top:0.5rem;">← Change number</button>
+            </form>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-meta">
+            <p>&copy; 2026 JUJO Residence</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+(function () {
+  var phoneSaved = "";
+  fetch("/api/config")
+    .then(function (r) {
+      return r.json();
+    })
+    .then(function (d) {
+      var el = document.getElementById("reg-policy");
+      if (el && d.registrationNote) el.textContent = d.registrationNote;
+    })
+    .catch(function () {});
+
+  document.getElementById("form-step1").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var msg = document.getElementById("msg1");
+    msg.textContent = "";
+    fetch("/api/auth/register/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        full_name: fd.get("full_name"),
+        email: fd.get("email"),
+        phone: fd.get("phone"),
+        password: fd.get("password"),
+        property_slug: fd.get("property_slug"),
+      }),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        if (!x.ok) {
+          msg.className = "form-msg err";
+          msg.textContent = x.j.error || "Could not start.";
+          return;
+        }
+        phoneSaved = fd.get("phone");
+        document.getElementById("phone-display").textContent = phoneSaved;
+        document.getElementById("otp-phone").value = phoneSaved;
+        document.getElementById("form-step1").hidden = true;
+        document.getElementById("form-step2").hidden = false;
+        document.querySelectorAll("#reg-steps span").forEach(function (s) {
+          s.classList.toggle("is-active", s.getAttribute("data-step") === "2");
+        });
+        msg.className = "form-msg ok";
+        msg.textContent = "Code sent.";
+        var m2 = document.getElementById("msg2");
+        m2.className = "form-msg ok";
+        m2.textContent = x.j.devOtp
+          ? "Dev mode: your code is " + x.j.devOtp + " (check server console too)."
+          : "Check your phone for the SMS.";
+      })
+      .catch(function () {
+        msg.className = "form-msg err";
+        msg.textContent = "Server not reachable.";
+      });
+  });
+
+  document.getElementById("form-step2").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var msg = document.getElementById("msg2");
+    msg.textContent = "";
+    fetch("/api/auth/register/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone: fd.get("phone") || phoneSaved,
+        otp: fd.get("otp"),
+      }),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        if (!x.ok) {
+          msg.className = "form-msg err";
+          msg.textContent = x.j.error || "Verification failed.";
+          return;
+        }
+        msg.className = "form-msg ok";
+        msg.textContent = x.j.message || "Done.";
+        setTimeout(function () {
+          window.location.href = "login.html";
+        }, 1800);
+      });
+  });
+
+  document.getElementById("back-step1").addEventListener("click", function () {
+    document.getElementById("form-step2").hidden = true;
+    document.getElementById("form-step1").hidden = false;
+    document.querySelectorAll("#reg-steps span").forEach(function (s) {
+      s.classList.toggle("is-active", s.getAttribute("data-step") === "1");
+    });
+    document.getElementById("msg1").textContent = "";
+    document.getElementById("msg2").textContent = "";
+  });
+})();
+    </script>
+</body>
+</html>

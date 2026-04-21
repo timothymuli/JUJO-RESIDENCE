@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Operations | JUJO Residence</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="site-header">
+        <nav class="navbar container" aria-label="Primary">
+            <div class="logo">
+                <a href="index.html" class="logo__link">
+                    <span class="logo__name">JUJO Residence</span>
+                    <span class="logo__sub">Operations</span>
+                </a>
+            </div>
+            <ul class="nav-links">
+                <li><a href="index.html">Public site</a></li>
+            </ul>
+            <div class="nav-extras">
+                <span class="nav-auth" id="whoami"></span>
+                <button type="button" class="btn btn-secondary" id="logout-btn">Log out</button>
+                <button type="button" class="btn-ghost" id="dark-mode-toggle">Theme</button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="dashboard-wrap">
+        <header class="dash-header">
+            <h1>Operations desk</h1>
+            <p class="dash-sub">Inbox, maintenance queue, rent ledger, and tenant onboarding for both properties.</p>
+        </header>
+
+        <section class="panel" aria-labelledby="pending-h">
+            <h2 id="pending-h">Tenants awaiting activation</h2>
+            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">After self-registration + SMS, these accounts cannot sign in until you approve.</p>
+            <div class="table-wrap">
+                <table class="data" id="pending-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Property</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="muted" id="pending-empty" style="font-size:0.9rem;margin-top:0.75rem;display:none;">No pending registrations.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="inbox-h">
+            <h2 id="inbox-h">Contact inbox</h2>
+            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">Latest 100 messages from the public form.</p>
+            <div class="table-wrap">
+                <table class="data" id="inbox-table">
+                    <thead>
+                        <tr>
+                            <th>Received</th>
+                            <th>Property</th>
+                            <th>From</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="maint-h">
+            <h2 id="maint-h">Maintenance queue</h2>
+            <div class="table-wrap">
+                <table class="data" id="maint-table">
+                    <thead>
+                        <tr>
+                            <th>Property</th>
+                            <th>Tenant</th>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Update</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="ledger-h">
+            <h2 id="ledger-h">Rent ledger</h2>
+            <div class="table-wrap">
+                <table class="data" id="rent-table">
+                    <thead>
+                        <tr>
+                            <th>Tenant</th>
+                            <th>Property</th>
+                            <th>Period</th>
+                            <th>Due</th>
+                            <th>Amount</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="panel">
+            <h2>Onboard tenant</h2>
+            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">Creates a login scoped to one building.</p>
+            <form id="user-form" class="form-stack">
+                <label>Email <input type="email" name="email" required autocomplete="off"></label>
+                <label>Temporary password <input type="password" name="password" required minlength="8"></label>
+                <label>Display name <input type="text" name="full_name" maxlength="120"></label>
+                <label>Property
+                    <select name="property_id" id="property-select" required></select>
+                </label>
+                <button type="submit" class="btn">Create tenant</button>
+                <p id="user-msg" class="form-msg"></p>
+            </form>
+        </div>
+
+        <div class="panel">
+            <h2>Add rent line</h2>
+            <form id="rent-form" class="form-stack">
+                <label>Tenant user ID <input type="number" name="user_id" required min="1"></label>
+                <label>Property
+                    <select name="property_id" id="rent-property-select" required></select>
+                </label>
+                <label>Period label <input type="text" name="label" required placeholder="e.g. June 2026"></label>
+                <label>Amount (KES, whole shillings) <input type="number" name="amount_kes" required min="0"></label>
+                <label>Due date <input type="date" name="due_date" required></label>
+                <label><input type="checkbox" name="paid"> Mark paid immediately</label>
+                <button type="submit" class="btn">Save line</button>
+                <p id="rent-msg" class="form-msg"></p>
+            </form>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-meta">
+            <p>&copy; 2026 JUJO Residence</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+(function () {
+  function kes(cents) {
+    try {
+      return new Intl.NumberFormat("en-KE", {
+        style: "currency",
+        currency: "KES",
+        maximumFractionDigits: 0,
+      }).format(cents / 100);
+    } catch (e) {
+      return "KES " + (cents / 100).toFixed(0);
+    }
+  }
+
+  function badgeClass(status) {
+    var map = {
+      open: "badge--open",
+      in_progress: "badge--progress",
+      done: "badge--done",
+      paid: "badge--paid",
+      due: "badge--due",
+      late: "badge--late",
+    };
+    return map[status] || "";
+  }
+
+  function fillSelect(sel, props) {
+    sel.innerHTML = "";
+    props.forEach(function (p) {
+      var o = document.createElement("option");
+      o.value = p.id;
+      o.textContent = p.name;
+      sel.appendChild(o);
+    });
+  }
+
+  function loadTables() {
+    fetch("/api/me", { credentials: "same-origin" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data.user || data.user.role !== "admin") {
+          window.location.href = "login.html";
+          return null;
+        }
+        document.getElementById("whoami").textContent = data.user.email;
+        return fetch("/api/properties", { credentials: "same-origin" }).then(
+          function (r) {
+            return r.json();
+          }
+        );
+      })
+      .then(function (props) {
+        if (!props || !props.properties) return;
+        fillSelect(document.getElementById("property-select"), props.properties);
+        fillSelect(
+          document.getElementById("rent-property-select"),
+          props.properties
+        );
+        return Promise.all([
+          fetch("/api/admin/pending-tenants", { credentials: "same-origin" }).then(
+            function (r) {
+              return r.json();
+            }
+          ),
+          fetch("/api/admin/messages", { credentials: "same-origin" }).then(
+            function (r) {
+              return r.json();
+            }
+          ),
+          fetch("/api/maintenance", { credentials: "same-origin" }).then(
+            function (r) {
+              return r.json();
+            }
+          ),
+          fetch("/api/rent", { credentials: "same-origin" }).then(function (r) {
+            return r.json();
+          }),
+        ]);
+      })
+      .then(function (quad) {
+        if (!quad) return;
+        var pending = quad[0];
+        var inbox = quad[1];
+        var maint = quad[2];
+        var rent = quad[3];
+
+        var pt = document.querySelector("#pending-table tbody");
+        var pempty = document.getElementById("pending-empty");
+        pt.innerHTML = "";
+        var plist = pending.tenants || [];
+        if (plist.length === 0) {
+          pempty.style.display = "block";
+        } else {
+          pempty.style.display = "none";
+          plist.forEach(function (row) {
+            var tr = document.createElement("tr");
+            ["full_name", "email", "phone", "property_name"].forEach(function (k) {
+              var td = document.createElement("td");
+              td.textContent = row[k] || "—";
+              tr.appendChild(td);
+            });
+            var tdAct = document.createElement("td");
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn";
+            btn.textContent = "Activate";
+            btn.addEventListener("click", function () {
+              fetch("/api/admin/users/" + row.id + "/approve", {
+                method: "POST",
+                credentials: "same-origin",
+              }).then(function () {
+                loadTables();
+              });
+            });
+            tdAct.appendChild(btn);
+            tr.appendChild(tdAct);
+            pt.appendChild(tr);
+          });
+        }
+
+        var ib = document.querySelector("#inbox-table tbody");
+        ib.innerHTML = "";
+        (inbox.messages || []).forEach(function (row) {
+          var tr = document.createElement("tr");
+          [
+            row.created_at,
+            row.property_slug || "—",
+            (row.name ? row.name + " " : "") + "<" + row.email + ">",
+          ].forEach(function (text) {
+            var td = document.createElement("td");
+            td.textContent = text;
+            tr.appendChild(td);
+          });
+          var msgCell = document.createElement("td");
+          msgCell.textContent = row.message || "";
+          msgCell.style.maxWidth = "22rem";
+          msgCell.style.whiteSpace = "pre-wrap";
+          tr.appendChild(msgCell);
+          ib.appendChild(tr);
+        });
+
+        var mt = document.querySelector("#maint-table tbody");
+        mt.innerHTML = "";
+        (maint.requests || []).forEach(function (row) {
+          var tr = document.createElement("tr");
+          ["property_name", "tenant_email", "title"].forEach(function (key) {
+            var td = document.createElement("td");
+            td.textContent = row[key] || "";
+            tr.appendChild(td);
+          });
+          var tdStatus = document.createElement("td");
+          var b = document.createElement("span");
+          b.className = "badge " + badgeClass(row.status);
+          b.textContent = (row.status || "").replace(/_/g, " ");
+          tdStatus.appendChild(b);
+          tr.appendChild(tdStatus);
+          var tdAct = document.createElement("td");
+          var sel = document.createElement("select");
+          sel.setAttribute("aria-label", "Set status for " + row.title);
+          ["open", "in_progress", "done"].forEach(function (s) {
+            var o = document.createElement("option");
+            o.value = s;
+            o.textContent = s.replace("_", " ");
+            if (s === row.status) o.selected = true;
+            sel.appendChild(o);
+          });
+          sel.addEventListener("change", function () {
+            fetch("/api/maintenance/" + row.id, {
+              method: "PATCH",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: sel.value }),
+            }).then(function () {
+              loadTables();
+            });
+          });
+          tdAct.appendChild(sel);
+          tr.appendChild(tdAct);
+          mt.appendChild(tr);
+        });
+
+        var rt = document.querySelector("#rent-table tbody");
+        rt.innerHTML = "";
+        (rent.records || []).forEach(function (row) {
+          var tr = document.createElement("tr");
+          ["tenant_email", "property_name", "label", "due_date"].forEach(
+            function (key) {
+              var td = document.createElement("td");
+              td.textContent = row[key] || "";
+              tr.appendChild(td);
+            }
+          );
+          var tdAmt = document.createElement("td");
+          tdAmt.textContent = kes(row.amount_cents);
+          tr.appendChild(tdAmt);
+          var tdSt = document.createElement("td");
+          var span = document.createElement("span");
+          span.className = "badge " + badgeClass(row.status);
+          span.textContent = row.status;
+          tdSt.appendChild(span);
+          tr.appendChild(tdSt);
+          rt.appendChild(tr);
+        });
+      })
+      .catch(function () {
+        window.location.href = "login.html";
+      });
+  }
+
+  document.getElementById("logout-btn").addEventListener("click", function () {
+    fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+    }).then(function () {
+      window.location.href = "index.html";
+    });
+  });
+
+  document.getElementById("user-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var msg = document.getElementById("user-msg");
+    fetch("/api/admin/users", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: fd.get("email"),
+        password: fd.get("password"),
+        full_name: fd.get("full_name"),
+        property_id: Number(fd.get("property_id")),
+      }),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        msg.className = "form-msg " + (x.ok ? "ok" : "err");
+        msg.textContent = x.ok ? "Tenant created." : x.j.error || "Failed.";
+        if (x.ok) e.target.reset();
+      });
+  });
+
+  document.getElementById("rent-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var kesVal = Number(fd.get("amount_kes"));
+    var cents = Math.round(kesVal * 100);
+    var msg = document.getElementById("rent-msg");
+    fetch("/api/rent/record", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: Number(fd.get("user_id")),
+        property_id: Number(fd.get("property_id")),
+        label: fd.get("label"),
+        amount_cents: cents,
+        due_date: fd.get("due_date"),
+        paid: fd.get("paid") === "on",
+      }),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        msg.className = "form-msg " + (x.ok ? "ok" : "err");
+        msg.textContent = x.ok ? "Saved." : x.j.error || "Failed.";
+        if (x.ok) e.target.reset();
+        if (x.ok) loadTables();
+      });
+  });
+
+  loadTables();
+})();
+    </script>
+</body>
+</html>

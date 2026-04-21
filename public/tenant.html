@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tenant portal | JUJO Residence</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="site-header">
+        <nav class="navbar container" aria-label="Primary">
+            <div class="logo">
+                <a href="index.html" class="logo__link">
+                    <span class="logo__name">JUJO Residence</span>
+                    <span class="logo__sub">Tenant portal</span>
+                </a>
+            </div>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+            </ul>
+            <div class="nav-extras">
+                <span class="nav-auth" id="whoami" title="Signed in as"></span>
+                <button type="button" class="btn btn-secondary" id="logout-btn">Log out</button>
+                <button type="button" class="btn-ghost" id="dark-mode-toggle">Theme</button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="dashboard-wrap">
+        <header class="dash-header">
+            <h1>Your account</h1>
+            <p class="dash-sub" id="property-line"></p>
+            <div class="dash-toolbar">
+                <span class="muted" style="font-size:0.9rem;">Rent lines and requests are office-entered unless you’ve been told otherwise.</span>
+            </div>
+        </header>
+
+        <section class="panel" id="tenant-mpesa-wrap" hidden aria-labelledby="mpesa-tenant-h">
+            <h2 id="mpesa-tenant-h">Pay rent (M-Pesa Paybill)</h2>
+            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">Use only the details for your building. Wrong paybill delays allocation.</p>
+            <div class="mpesa-box" style="margin:0;">
+                <p style="margin:0 0 0.5rem;font-size:0.9rem;" id="mpesa-tenant-label"></p>
+                <dl>
+                    <dt>Paybill</dt>
+                    <dd id="mpesa-tenant-paybill">—</dd>
+                    <dt>Account number</dt>
+                    <dd id="mpesa-tenant-account">—</dd>
+                </dl>
+                <ol style="margin-top:0.75rem;">
+                    <li>M-Pesa → Lipa na M-Pesa → Paybill.</li>
+                    <li>Enter paybill and account above; amount as on your statement.</li>
+                </ol>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="rent-heading">
+            <h2 id="rent-heading">Rent schedule</h2>
+            <div class="table-wrap">
+                <table class="data" id="rent-table">
+                    <thead><tr><th>Period</th><th>Due</th><th>Amount</th><th>Status</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="maint-heading">
+            <h2 id="maint-heading">Maintenance</h2>
+            <div class="table-wrap">
+                <table class="data" id="maint-table">
+                    <thead><tr><th>Logged</th><th>Title</th><th>Status</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <h3 class="sub" id="new-req">New request</h3>
+            <form id="maint-form" class="form-stack">
+                <label>Short title <input type="text" name="title" required maxlength="200" placeholder="e.g. Hot water fluctuating"></label>
+                <label>Details <textarea name="description" maxlength="4000" placeholder="Unit, floor, when it started, photos sent separately…"></textarea></label>
+                <button type="submit" class="btn">Submit request</button>
+                <p id="maint-msg" class="form-msg"></p>
+            </form>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-meta">
+            <p>&copy; 2026 JUJO Residence</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+(function () {
+  function kes(cents) {
+    try {
+      return new Intl.NumberFormat("en-KE", {
+        style: "currency",
+        currency: "KES",
+        maximumFractionDigits: 0,
+      }).format(cents / 100);
+    } catch (e) {
+      return "KES " + (cents / 100).toFixed(0);
+    }
+  }
+
+  function badgeClass(status) {
+    var map = {
+      open: "badge--open",
+      in_progress: "badge--progress",
+      done: "badge--done",
+      paid: "badge--paid",
+      due: "badge--due",
+      late: "badge--late",
+    };
+    return map[status] || "";
+  }
+
+  function load() {
+    fetch("/api/me", { credentials: "same-origin" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data.user || data.user.role !== "tenant") {
+          window.location.href = "login.html";
+          return;
+        }
+        document.getElementById("whoami").textContent = data.user.email;
+        var pl = document.getElementById("property-line");
+        if (data.property) {
+          pl.textContent = data.property.name;
+        } else {
+          pl.textContent = "No property linked — contact the office.";
+        }
+        var mw = document.getElementById("tenant-mpesa-wrap");
+        if (data.mpesa && mw) {
+          mw.hidden = false;
+          document.getElementById("mpesa-tenant-label").textContent = data.mpesa.label || "";
+          document.getElementById("mpesa-tenant-paybill").textContent = data.mpesa.paybill || "—";
+          document.getElementById("mpesa-tenant-account").textContent =
+            data.mpesa.account || "(Ask office for account number)";
+        } else if (mw) {
+          mw.hidden = true;
+        }
+        return Promise.all([
+          fetch("/api/rent", { credentials: "same-origin" }).then(function (r) {
+            return r.json();
+          }),
+          fetch("/api/maintenance", { credentials: "same-origin" }).then(
+            function (r) {
+              return r.json();
+            }
+          ),
+        ]);
+      })
+      .then(function (pair) {
+        if (!pair) return;
+        var rent = pair[0];
+        var maint = pair[1];
+        var rt = document.querySelector("#rent-table tbody");
+        rt.innerHTML = "";
+        (rent.records || []).forEach(function (row) {
+          var tr = document.createElement("tr");
+          var tdS = document.createElement("td");
+          var span = document.createElement("span");
+          span.className = "badge " + badgeClass(row.status);
+          span.textContent = row.status;
+          tdS.appendChild(span);
+          var td0 = document.createElement("td");
+          td0.textContent = row.label;
+          var td1 = document.createElement("td");
+          td1.textContent = row.due_date;
+          var td2 = document.createElement("td");
+          td2.textContent = kes(row.amount_cents);
+          tr.appendChild(td0);
+          tr.appendChild(td1);
+          tr.appendChild(td2);
+          tr.appendChild(tdS);
+          rt.appendChild(tr);
+        });
+        var mt = document.querySelector("#maint-table tbody");
+        mt.innerHTML = "";
+        (maint.requests || []).forEach(function (row) {
+          var tr = document.createElement("tr");
+          var td0 = document.createElement("td");
+          td0.textContent = row.created_at;
+          var td1 = document.createElement("td");
+          td1.textContent = row.title;
+          var td2 = document.createElement("td");
+          var span = document.createElement("span");
+          span.className = "badge " + badgeClass(row.status);
+          span.textContent = (row.status || "").replace(/_/g, " ");
+          td2.appendChild(span);
+          tr.appendChild(td0);
+          tr.appendChild(td1);
+          tr.appendChild(td2);
+          mt.appendChild(tr);
+        });
+      })
+      .catch(function () {
+        window.location.href = "login.html";
+      });
+  }
+
+  document.getElementById("logout-btn").addEventListener("click", function () {
+    fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+    }).then(function () {
+      window.location.href = "index.html";
+    });
+  });
+
+  document.getElementById("maint-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var msg = document.getElementById("maint-msg");
+    fetch("/api/maintenance", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: fd.get("title"),
+        description: fd.get("description") || "",
+      }),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        msg.className = "form-msg " + (x.ok ? "ok" : "err");
+        msg.textContent = x.ok ? "Request logged." : x.j.error || "Failed.";
+        if (x.ok) {
+          e.target.reset();
+          load();
+        }
+      });
+  });
+
+  load();
+})();
+    </script>
+</body>
+</html>

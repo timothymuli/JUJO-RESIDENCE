@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign in | JUJO Residence</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="auth-page">
+    <header class="site-header">
+        <nav class="navbar container" aria-label="Primary">
+            <div class="logo">
+                <a href="index.html" class="logo__link">
+                    <span class="logo__name">JUJO Residence</span>
+                    <span class="logo__sub">Tenant &amp; admin</span>
+                </a>
+            </div>
+            <ul class="nav-links">
+                <li><a href="index.html">Home</a></li>
+            </ul>
+            <div class="nav-extras">
+                <button type="button" class="btn-ghost" id="dark-mode-toggle">Theme</button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="auth-main">
+        <div class="auth-card">
+            <h1>Sign in</h1>
+            <p class="lead">Tenants see rent and maintenance; administrators see the full desk. New here? <a href="register.html">Register</a> with your Safaricom number (SMS code). Otherwise sign in below.</p>
+            <form id="login-form" class="form-stack">
+                <label>Work email <input type="email" name="email" required autocomplete="username"></label>
+                <label>Password <input type="password" name="password" required autocomplete="current-password"></label>
+                <button type="submit" class="btn" style="width:100%;max-width:32rem;">Continue</button>
+                <p id="login-msg" class="form-msg"></p>
+            </form>
+            <details class="login-hint">
+                <summary>Demo credentials (development only)</summary>
+                <p style="margin:0.75rem 0 0;line-height:1.55;">Tenants: <code>sam@mlolongo.demo</code> / <code>tenant123</code> · <code>pat@syokimau.demo</code> / <code>tenant123</code><br>
+                Admin: <code>admin@jujo.local</code> / value of <code>ADMIN_PASSWORD</code> in <code>.env</code> (default <code>changeme123</code>).</p>
+            </details>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-meta">
+            <p>&copy; 2026 JUJO Residence</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+(function () {
+  var form = document.getElementById("login-form");
+  var msg = document.getElementById("login-msg");
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var fd = new FormData(form);
+    fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({
+        email: fd.get("email"),
+        password: fd.get("password"),
+      }),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        if (!x.ok) {
+          msg.className = "form-msg err";
+          msg.textContent = x.j.error || "Login failed.";
+          return;
+        }
+        if (x.j.user.role === "admin") {
+          window.location.href = "admin.html";
+        } else {
+          window.location.href = "tenant.html";
+        }
+      })
+      .catch(function () {
+        msg.className = "form-msg err";
+        msg.textContent = "No response — start the server (npm start).";
+      });
+  });
+})();
+    </script>
+</body>
+</html>
