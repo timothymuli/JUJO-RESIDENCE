@@ -6,7 +6,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "add-staff": "node scripts/add-staff.js"
   },
   "engines": {
     "node": ">=18"

@@ -1144,6 +1144,10 @@ app.get("/api/documents/:id/file", requireLogin, function (req, res) {
   fs.createReadStream(full).pipe(res);
 });
 
+app.get("/api/health", function (req, res) {
+  res.json({ ok: true });
+});
+
 app.use(express.static(path.join(__dirname, "public")));
 
 app.use(function (req, res) {
@@ -1158,5 +1162,6 @@ if (process.env.DISABLE_REMINDERS !== "1") {
 }
 
 app.listen(PORT, function () {
-  console.log("JUJO Residence server on http://localhost:" + PORT);
+  var url = process.env.RENDER_EXTERNAL_URL || "http://localhost:" + PORT;
+  console.log("JUJO Residence server on " + url);
 });

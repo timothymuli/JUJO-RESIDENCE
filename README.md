@@ -33,6 +33,26 @@ First run creates `data/jujo.db` and seeds demo data. Delete `data/jujo.db` to r
 - **Approval:** New tenants default to **pending** until an admin clicks **Activate** on the admin dashboard (`REGISTRATION_AUTO_APPROVE=1` skips that).
 - **M-Pesa Paybill** numbers are in `.env` (`JUJO_MPESA_*`, `BLESSED_MPESA_*`) and shown on property pages and the tenant portal. This is **manual Paybill** (not STK Push). Daraja STK can be added later.
 
+## Deploy on Render (free — works on phone)
+
+The whole app (pages + API + database) runs as one service on [Render](https://render.com).
+
+1. Push this repo to GitHub (already done if you cloned from there).
+2. Go to [dashboard.render.com](https://dashboard.render.com) → **New** → **Blueprint**.
+3. Connect **JUJO-RESIDENCE** and apply. When asked, set **`ADMIN_PASSWORD`** (your admin login password).
+4. Wait for the deploy to finish. Open the URL Render gives you (e.g. `https://jujo-residence.onrender.com`).
+
+**Demo logins on Render** (first deploy seeds the database):
+
+| Role   | Email               | Password                          |
+|--------|---------------------|-----------------------------------|
+| Admin  | `admin@jujo.local`  | Value you set for `ADMIN_PASSWORD` |
+| Tenant | `sam@mlolongo.demo` | `tenant123`                       |
+
+With `SMS_MOCK=1` (default on Render), registration shows the OTP on screen and in Render logs.
+
+**Free tier notes:** the app may sleep after ~15 minutes with no visits (first load can be slow). SQLite data lives on the server disk until you redeploy.
+
 ## What’s not included
 
 Automatic M-Pesa STK push (Safaricom Daraja), email alerts, production session store (Redis), and HTTPS — add when you go live.
