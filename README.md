@@ -53,6 +53,16 @@ With `SMS_MOCK=1` (default on Render), registration shows the OTP on screen and 
 
 **Free tier notes:** the app may sleep after ~15 minutes with no visits (first load can be slow). SQLite data lives on the server disk until you redeploy.
 
+## Vercel + Render (optional)
+
+If you use **Vercel** for the website (`jujo-residence.vercel.app`) and **Render** for the backend:
+
+1. Deploy the full app on Render first (steps above) and note the URL (e.g. `https://jujo-residence.onrender.com`).
+2. `vercel.json` in this repo sends `/api/*` from Vercel to that Render URL.
+3. If your Render URL is different, edit `destination` in `vercel.json` to match, then push to GitHub so Vercel redeploys.
+
+**Easier option:** open your **Render URL only** — it serves both pages and API, no Vercel needed.
+
 ## What’s not included
 
 Automatic M-Pesa STK push (Safaricom Daraja), email alerts, production session store (Redis), and HTTPS — add when you go live.
