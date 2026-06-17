@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Landlord portfolio | JUJO Residence</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="site-header">
+        <nav class="navbar container" aria-label="Primary">
+            <div class="logo">
+                <a href="index.html" class="logo__link">
+                    <span class="logo__name">JUJO Residence</span>
+                    <span class="logo__sub">Landlord</span>
+                </a>
+            </div>
+            <ul class="nav-links">
+                <li><a href="index.html">Public site</a></li>
+            </ul>
+            <div class="nav-extras">
+                <span class="nav-auth" id="whoami"></span>
+                <button type="button" class="btn btn-secondary" id="logout-btn">Log out</button>
+                <button type="button" class="btn-ghost" id="dark-mode-toggle">Theme</button>
+            </div>
+        </nav>
+    </header>
+
+    <main class="dashboard-wrap">
+        <header class="dash-header">
+            <h1>Landlord portfolio</h1>
+            <p class="dash-sub">Both properties — pending tenants, inbox, maintenance, and rent (tenant accounts are created by the office admin).</p>
+        </header>
+
+        <section class="panel" aria-labelledby="summary-h">
+            <h2 id="summary-h">Numbers at a glance</h2>
+            <div id="summary-body" class="muted" style="font-size:0.95rem;line-height:1.65;">Loading…</div>
+        </section>
+
+        <section class="panel" aria-labelledby="pending-h">
+            <h2 id="pending-h">Tenants awaiting activation</h2>
+            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">After self-registration + SMS, these accounts cannot sign in until you approve.</p>
+            <div class="table-wrap">
+                <table class="data" id="pending-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Property</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="muted" id="pending-empty" style="font-size:0.9rem;margin-top:0.75rem;display:none;">No pending registrations.</p>
+        </section>
+
+        <section class="panel" aria-labelledby="inbox-h">
+            <h2 id="inbox-h">Contact inbox</h2>
+            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">Latest 100 messages from the public form.</p>
+            <div class="table-wrap">
+                <table class="data" id="inbox-table">
+                    <thead>
+                        <tr>
+                            <th>Received</th>
+                            <th>Property</th>
+                            <th>From</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="maint-h">
+            <h2 id="maint-h">Maintenance queue</h2>
+            <div class="table-wrap">
+                <table class="data" id="maint-table">
+                    <thead>
+                        <tr>
+                            <th>Property</th>
+                            <th>Tenant</th>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Update</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="panel" aria-labelledby="ledger-h">
+            <h2 id="ledger-h">Rent ledger</h2>
+            <div class="table-wrap">
+                <table class="data" id="rent-table">
+                    <thead>
+                        <tr>
+                            <th>Tenant</th>
+                            <th>Property</th>
+                            <th>Period</th>
+                            <th>Due</th>
+                            <th>Rent</th>
+                            <th>Water</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <div class="panel" aria-labelledby="tdocs-h">
+            <h2 id="tdocs-h">Tenant documents (ID / lease)</h2>
+            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">Use the tenant <strong>user ID</strong> from the tables above.</p>
+            <div class="form-stack" style="max-width:36rem;">
+                <label>Tenant user ID <input type="number" id="tdocs-tenant-id" min="1"></label>
+                <button type="button" class="btn btn-secondary" id="tdocs-load">Load list</button>
+            </div>
+            <div class="table-wrap" style="margin-top:1rem;">
+                <table class="data" id="tdocs-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>File name</th>
+                            <th>When</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="muted" id="tdocs-empty" style="font-size:0.9rem;margin-top:0.75rem;display:none;">No documents for this tenant.</p>
+            <h3 class="sub">Upload for this tenant</h3>
+            <form id="tdocs-form" class="form-stack" style="max-width:36rem;">
+                <label>Document type
+                    <select name="doc_type" id="tdocs-type" required>
+                        <option value="lease_template">Lease template (from office)</option>
+                        <option value="national_id">National ID / passport</option>
+                        <option value="lease_signed">Signed lease</option>
+                    </select>
+                </label>
+                <label>File (PDF or image) <input type="file" id="tdocs-file" required accept=".pdf,.jpg,.jpeg,.png,image/*,application/pdf"></label>
+                <button type="submit" class="btn">Upload</button>
+                <p id="tdocs-msg" class="form-msg"></p>
+            </form>
+            <h3 class="sub">Unit on file (optional)</h3>
+            <form id="tprofile-form" class="form-stack" style="max-width:36rem;">
+                <label>House / unit label <input type="text" name="house_number" id="tprof-house" maxlength="64"></label>
+                <label>Bedrooms <input type="text" name="bedrooms" id="tprof-beds" maxlength="32"></label>
+                <button type="submit" class="btn">Save profile fields</button>
+                <p id="tprofile-msg" class="form-msg"></p>
+            </form>
+        </div>
+
+        <div class="panel">
+            <h2>Add rent line</h2>
+            <form id="rent-form" class="form-stack">
+                <label>Tenant user ID <input type="number" name="user_id" required min="1"></label>
+                <label>Property
+                    <select name="property_id" id="rent-property-select" required></select>
+                </label>
+                <label>Period label <input type="text" name="label" required placeholder="e.g. June 2026"></label>
+                <label>Rent (KES, whole shillings) <input type="number" name="amount_kes" required min="0"></label>
+                <label>Water (KES, optional) <input type="number" name="water_kes" min="0" value="0" step="1"></label>
+                <label>Due date <input type="date" name="due_date" required></label>
+                <label><input type="checkbox" name="paid"> Mark paid immediately</label>
+                <button type="submit" class="btn">Save line</button>
+                <p id="rent-msg" class="form-msg"></p>
+            </form>
+        </div>
+    </main>
+
+    <footer class="site-footer">
+        <div class="container footer-meta">
+            <p>&copy; 2026 JUJO Residence</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+    <script>
+(function () {
+  function kes(cents) {
+    try {
+      return new Intl.NumberFormat("en-KE", {
+        style: "currency",
+        currency: "KES",
+        maximumFractionDigits: 0,
+      }).format(cents / 100);
+    } catch (e) {
+      return "KES " + (cents / 100).toFixed(0);
+    }
+  }
+
+  function badgeClass(status) {
+    var map = {
+      open: "badge--open",
+      in_progress: "badge--progress",
+      done: "badge--done",
+      paid: "badge--paid",
+      due: "badge--due",
+      late: "badge--late",
+    };
+    return map[status] || "";
+  }
+
+  function fillSelect(sel, props) {
+    sel.innerHTML = "";
+    props.forEach(function (p) {
+      var o = document.createElement("option");
+      o.value = p.id;
+      o.textContent = p.name;
+      sel.appendChild(o);
+    });
+  }
+
+  function renderSummary(s) {
+    var el = document.getElementById("summary-body");
+    if (!el || !s) return;
+    var parts = [];
+    (s.tenantsByProperty || []).forEach(function (r) {
+      parts.push((r.slug || "—") + ": " + r.c + " active tenants");
+    });
+    parts.push("Open maintenance: " + (s.openMaintenanceCount || 0));
+    parts.push(
+      "Arrears lines: " +
+        (s.arrearsCount || 0) +
+        " (" +
+        kes(s.arrearsTotalCents || 0) +
+        " rent+water)"
+    );
+    parts.push("Vacant units listed: " + (s.vacantUnits || 0));
+    if (s.billing) {
+      parts.push(
+        "Due by " +
+          s.billing.dueDay +
+          " · grace to " +
+          s.billing.graceUntilDay +
+          " · late fee: " +
+          s.billing.lateFee +
+          " · " +
+          s.billing.currency
+      );
+    }
+    el.textContent = parts.join(" · ");
+  }
+
+  function loadTables() {
+    fetch("/api/me", { credentials: "same-origin" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data.user || data.user.role !== "landlord") {
+          window.location.href = "login.html";
+          return null;
+        }
+        document.getElementById("whoami").textContent = data.user.email;
+        fetch("/api/staff/summary", { credentials: "same-origin" })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (sum) {
+            if (sum.ok && sum.summary) renderSummary(sum.summary);
+          })
+          .catch(function () {});
+        return fetch("/api/properties", { credentials: "same-origin" }).then(
+          function (r) {
+            return r.json();
+          }
+        );
+      })
+      .then(function (props) {
+        if (!props || !props.properties) return;
+        fillSelect(
+          document.getElementById("rent-property-select"),
+          props.properties
+        );
+        return Promise.all([
+          fetch("/api/admin/pending-tenants", { credentials: "same-origin" }).then(
+            function (r) {
+              return r.json();
+            }
+          ),
+          fetch("/api/admin/messages", { credentials: "same-origin" }).then(
+            function (r) {
+              return r.json();
+            }
+          ),
+          fetch("/api/maintenance", { credentials: "same-origin" }).then(
+            function (r) {
+              return r.json();
+            }
+          ),
+          fetch("/api/rent", { credentials: "same-origin" }).then(function (r) {
+            return r.json();
+          }),
+        ]);
+      })
+      .then(function (quad) {
+        if (!quad) return;
+        var pending = quad[0];
+        var inbox = quad[1];
+        var maint = quad[2];
+        var rent = quad[3];
+
+        var pt = document.querySelector("#pending-table tbody");
+        var pempty = document.getElementById("pending-empty");
+        pt.innerHTML = "";
+        var plist = pending.tenants || [];
+        if (plist.length === 0) {
+          pempty.style.display = "block";
+        } else {
+          pempty.style.display = "none";
+          plist.forEach(function (row) {
+            var tr = document.createElement("tr");
+            ["full_name", "email", "phone", "property_name"].forEach(function (k) {
+              var td = document.createElement("td");
+              td.textContent = row[k] || "—";
+              tr.appendChild(td);
+            });
+            var tdAct = document.createElement("td");
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn";
+            btn.textContent = "Activate";
+            btn.addEventListener("click", function () {
+              fetch("/api/admin/users/" + row.id + "/approve", {
+                method: "POST",
+                credentials: "same-origin",
+              }).then(function () {
+                loadTables();
+              });
+            });
+            tdAct.appendChild(btn);
+            tr.appendChild(tdAct);
+            pt.appendChild(tr);
+          });
+        }
+
+        var ib = document.querySelector("#inbox-table tbody");
+        ib.innerHTML = "";
+        (inbox.messages || []).forEach(function (row) {
+          var tr = document.createElement("tr");
+          [
+            row.created_at,
+            row.property_slug || "—",
+            (row.name ? row.name + " " : "") + "<" + row.email + ">",
+          ].forEach(function (text) {
+            var td = document.createElement("td");
+            td.textContent = text;
+            tr.appendChild(td);
+          });
+          var msgCell = document.createElement("td");
+          msgCell.textContent = row.message || "";
+          msgCell.style.maxWidth = "22rem";
+          msgCell.style.whiteSpace = "pre-wrap";
+          tr.appendChild(msgCell);
+          ib.appendChild(tr);
+        });
+
+        var mt = document.querySelector("#maint-table tbody");
+        mt.innerHTML = "";
+        (maint.requests || []).forEach(function (row) {
+          var tr = document.createElement("tr");
+          ["property_name", "tenant_email", "title"].forEach(function (key) {
+            var td = document.createElement("td");
+            td.textContent = row[key] || "";
+            tr.appendChild(td);
+          });
+          var tdStatus = document.createElement("td");
+          var b = document.createElement("span");
+          b.className = "badge " + badgeClass(row.status);
+          b.textContent = (row.status || "").replace(/_/g, " ");
+          tdStatus.appendChild(b);
+          tr.appendChild(tdStatus);
+          var tdAct = document.createElement("td");
+          var sel = document.createElement("select");
+          sel.setAttribute("aria-label", "Set status for " + row.title);
+          ["open", "in_progress", "done"].forEach(function (s) {
+            var o = document.createElement("option");
+            o.value = s;
+            o.textContent = s.replace("_", " ");
+            if (s === row.status) o.selected = true;
+            sel.appendChild(o);
+          });
+          sel.addEventListener("change", function () {
+            fetch("/api/maintenance/" + row.id, {
+              method: "PATCH",
+              credentials: "same-origin",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: sel.value }),
+            }).then(function () {
+              loadTables();
+            });
+          });
+          tdAct.appendChild(sel);
+          tr.appendChild(tdAct);
+          mt.appendChild(tr);
+        });
+
+        var rt = document.querySelector("#rent-table tbody");
+        rt.innerHTML = "";
+        (rent.records || []).forEach(function (row) {
+          var tr = document.createElement("tr");
+          ["tenant_email", "property_name", "label", "due_date"].forEach(
+            function (key) {
+              var td = document.createElement("td");
+              td.textContent = row[key] || "";
+              tr.appendChild(td);
+            }
+          );
+          var w = Number(row.water_amount_cents) || 0;
+          var tdRent = document.createElement("td");
+          tdRent.textContent = kes(row.amount_cents);
+          tr.appendChild(tdRent);
+          var tdWater = document.createElement("td");
+          tdWater.textContent = kes(w);
+          tr.appendChild(tdWater);
+          var tdSt = document.createElement("td");
+          var span = document.createElement("span");
+          span.className = "badge " + badgeClass(row.status);
+          span.textContent = row.status;
+          tdSt.appendChild(span);
+          tr.appendChild(tdSt);
+          rt.appendChild(tr);
+        });
+      })
+      .catch(function () {
+        window.location.href = "login.html";
+      });
+  }
+
+  document.getElementById("logout-btn").addEventListener("click", function () {
+    fetch("/api/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+    }).then(function () {
+      window.location.href = "index.html";
+    });
+  });
+
+  document.getElementById("rent-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var kesVal = Number(fd.get("amount_kes"));
+    var waterKes = Number(fd.get("water_kes"));
+    if (!Number.isFinite(waterKes) || waterKes < 0) waterKes = 0;
+    var cents = Math.round(kesVal * 100);
+    var waterCents = Math.round(waterKes * 100);
+    var msg = document.getElementById("rent-msg");
+    fetch("/api/rent/record", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: Number(fd.get("user_id")),
+        property_id: Number(fd.get("property_id")),
+        label: fd.get("label"),
+        amount_cents: cents,
+        water_amount_cents: waterCents,
+        due_date: fd.get("due_date"),
+        paid: fd.get("paid") === "on",
+      }),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        msg.className = "form-msg " + (x.ok ? "ok" : "err");
+        msg.textContent = x.ok ? "Saved." : x.j.error || "Failed.";
+        if (x.ok) e.target.reset();
+        if (x.ok) loadTables();
+      });
+  });
+
+  var tdocLabels = {
+    national_id: "ID / passport",
+    lease_template: "Lease template",
+    lease_signed: "Signed lease",
+  };
+
+  function renderTdocsList(payload) {
+    var tb = document.querySelector("#tdocs-table tbody");
+    var empty = document.getElementById("tdocs-empty");
+    tb.innerHTML = "";
+    var list = (payload && payload.documents) || [];
+    if (list.length === 0) {
+      empty.style.display = "block";
+      return;
+    }
+    empty.style.display = "none";
+    list.forEach(function (d) {
+      var tr = document.createElement("tr");
+      var t0 = document.createElement("td");
+      t0.textContent = tdocLabels[d.docType] || d.docType;
+      tr.appendChild(t0);
+      var t1 = document.createElement("td");
+      t1.textContent = d.originalName || "—";
+      tr.appendChild(t1);
+      var t2 = document.createElement("td");
+      t2.textContent = d.createdAt || "—";
+      tr.appendChild(t2);
+      var t3 = document.createElement("td");
+      var a = document.createElement("a");
+      a.href = d.downloadUrl;
+      a.className = "btn btn-secondary";
+      a.textContent = "Download";
+      a.setAttribute("download", "");
+      t3.appendChild(a);
+      tr.appendChild(t3);
+      tb.appendChild(tr);
+    });
+  }
+
+  document.getElementById("tdocs-load").addEventListener("click", function () {
+    var tid = Number(document.getElementById("tdocs-tenant-id").value);
+    var msg = document.getElementById("tdocs-msg");
+    if (!tid) {
+      msg.className = "form-msg err";
+      msg.textContent = "Enter a tenant user ID.";
+      return;
+    }
+    msg.textContent = "";
+    fetch("/api/staff/tenants/" + tid + "/documents", { credentials: "same-origin" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (j) {
+        if (!j.ok) {
+          msg.className = "form-msg err";
+          msg.textContent = j.error || "Could not load.";
+          return;
+        }
+        renderTdocsList(j);
+      })
+      .catch(function () {
+        msg.className = "form-msg err";
+        msg.textContent = "Request failed.";
+      });
+  });
+
+  document.getElementById("tdocs-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var tid = Number(document.getElementById("tdocs-tenant-id").value);
+    var msg = document.getElementById("tdocs-msg");
+    var fileEl = document.getElementById("tdocs-file");
+    if (!tid) {
+      msg.className = "form-msg err";
+      msg.textContent = "Enter tenant user ID.";
+      return;
+    }
+    if (!fileEl.files || !fileEl.files[0]) {
+      msg.className = "form-msg err";
+      msg.textContent = "Choose a file.";
+      return;
+    }
+    var fd = new FormData();
+    fd.append("file", fileEl.files[0]);
+    fd.append("doc_type", document.getElementById("tdocs-type").value);
+    fetch("/api/staff/tenants/" + tid + "/documents", {
+      method: "POST",
+      credentials: "same-origin",
+      body: fd,
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        msg.className = "form-msg " + (x.ok ? "ok" : "err");
+        msg.textContent = x.ok ? "Uploaded." : x.j.error || "Failed.";
+        if (x.ok) {
+          fileEl.value = "";
+          return fetch("/api/staff/tenants/" + tid + "/documents", {
+            credentials: "same-origin",
+          }).then(function (r) {
+            return r.json();
+          });
+        }
+        return null;
+      })
+      .then(function (j) {
+        if (j && j.ok) renderTdocsList(j);
+      });
+  });
+
+  document.getElementById("tprofile-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var tid = Number(document.getElementById("tdocs-tenant-id").value);
+    var msg = document.getElementById("tprofile-msg");
+    if (!tid) {
+      msg.className = "form-msg err";
+      msg.textContent = "Enter tenant user ID above.";
+      return;
+    }
+    fetch("/api/staff/tenants/" + tid + "/profile", {
+      method: "PATCH",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        house_number: document.getElementById("tprof-house").value,
+        bedrooms: document.getElementById("tprof-beds").value,
+      }),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        msg.className = "form-msg " + (x.ok ? "ok" : "err");
+        msg.textContent = x.ok ? "Saved." : x.j.error || "Failed.";
+      });
+  });
+
+  loadTables();
+})();
+    </script>
+</body>
+</html>

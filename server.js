@@ -3,6 +3,7 @@
 require("dotenv").config();
 
 const path = require("path");
+const fs = require("fs");
 const crypto = require("crypto");
 const express = require("express");
 const session = require("express-session");
@@ -13,9 +14,12 @@ const bcrypt = require("bcryptjs");
 const { initDb, getDb } = require("./lib/db");
 const { normalizeKePhone } = require("./lib/phone");
 const { sendSms } = require("./lib/sms");
+const { startReminders } = require("./lib/reminders");
+const { tenantDocUpload, uploadDirRoot, ensureUploadDir } = require("./lib/tenantUploads");
 
 initDb();
 const db = getDb();
+ensureUploadDir();
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -48,6 +52,14 @@ const registerLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 40,
+  message: { ok: false, error: "Too many uploads. Try again later." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 function hashOtp(code) {
   const salt = process.env.OTP_SALT || "jujo-otp-salt-change-in-production";
   return crypto.createHash("sha256").update(String(code) + salt).digest("hex");
@@ -62,7 +74,7 @@ function mpesaConfig() {
     },
     syokimau: {
       paybill: process.env.BLESSED_MPESA_PAYBILL || "247247",
-      account: process.env.BLESSED_MPESA_ACCOUNT || "",
+      account: process.env.BLESSED_MPESA_ACCOUNT || "749748",
       label: "Blessed Haven (Syokimau) — rent & deposits",
     },
   };
@@ -108,6 +120,132 @@ function requireTenant(req, res, next) {
   if (!req.session.uid || req.session.role !== "tenant") {
     return jsonErr(res, 403, "Tenants only.");
   }
+  next();
+}
+
+var OPS_ROLES = ["admin", "landlord", "caretaker", "accountant"];
+
+function loadUser(id) {
+  return db
+    .prepare(
+      `SELECT id, email, password_hash, role, property_id, full_name, phone,
+              COALESCE(approval_status, 'active') AS approval_status,
+              staff_title, can_access_mlolongo, can_access_syokimau, is_superadmin,
+              house_number, bedrooms
+       FROM users WHERE id = ?`
+    )
+    .get(id);
+}
+
+function propertyFilterForUser(user) {
+  if (!user) {
+    return { sql: " AND 1=0 ", params: [] };
+  }
+  if (user.role === "admin" || user.role === "landlord") {
+    return { sql: "", params: [] };
+  }
+  if (user.role === "caretaker" || user.role === "accountant") {
+    var bits = [];
+    if (Number(user.can_access_mlolongo)) {
+      bits.push("p.slug = 'mlolongo'");
+    }
+    if (Number(user.can_access_syokimau)) {
+      bits.push("p.slug = 'syokimau'");
+    }
+    if (!bits.length) {
+      return { sql: " AND 1=0 ", params: [] };
+    }
+    return { sql: " AND (" + bits.join(" OR ") + ") ", params: [] };
+  }
+  return { sql: " AND 1=0 ", params: [] };
+}
+
+function messageFilterForUser(user) {
+  if (!user) {
+    return { sql: " AND 1=0 ", params: [] };
+  }
+  if (user.role === "admin" || user.role === "landlord") {
+    return { sql: "", params: [] };
+  }
+  if (user.role === "caretaker" || user.role === "accountant") {
+    var bits = [];
+    if (Number(user.can_access_mlolongo)) {
+      bits.push("cm.property_slug = 'mlolongo'");
+    }
+    if (Number(user.can_access_syokimau)) {
+      bits.push("cm.property_slug = 'syokimau'");
+    }
+    if (!bits.length) {
+      return { sql: " AND 1=0 ", params: [] };
+    }
+    return {
+      sql:
+        " AND (cm.property_slug IS NULL OR trim(cm.property_slug) = '' OR " +
+        bits.join(" OR ") +
+        ") ",
+      params: [],
+    };
+  }
+  return { sql: " AND 1=0 ", params: [] };
+}
+
+function canStaffAccessProperty(user, propertyId) {
+  if (!user || !propertyId) {
+    return false;
+  }
+  if (user.role === "admin" || user.role === "landlord") {
+    return true;
+  }
+  if (user.role !== "caretaker" && user.role !== "accountant") {
+    return false;
+  }
+  var row = db.prepare("SELECT slug FROM properties WHERE id = ?").get(propertyId);
+  if (!row) {
+    return false;
+  }
+  if (row.slug === "mlolongo") {
+    return Number(user.can_access_mlolongo) === 1;
+  }
+  if (row.slug === "syokimau") {
+    return Number(user.can_access_syokimau) === 1;
+  }
+  return false;
+}
+
+function canOpsAccessTenant(opsUser, tenantUserId) {
+  var t = db
+    .prepare("SELECT id, role, property_id FROM users WHERE id = ?")
+    .get(tenantUserId);
+  if (!t || t.role !== "tenant") {
+    return false;
+  }
+  return canStaffAccessProperty(opsUser, t.property_id);
+}
+
+function safeStoredName(name) {
+  return typeof name === "string" && /^[a-f0-9]{48}\.(pdf|jpg|png)$/.test(name);
+}
+
+function wrapUpload(mw) {
+  return function (req, res, next) {
+    mw(req, res, function (err) {
+      if (err) {
+        return jsonErr(res, 400, err.message || "Upload failed.");
+      }
+      next();
+    });
+  };
+}
+
+function requireOperations(req, res, next) {
+  if (!req.session.uid) {
+    return jsonErr(res, 401, "Sign in first.");
+  }
+  var u = loadUser(req.session.uid);
+  if (!u || OPS_ROLES.indexOf(u.role) === -1) {
+    return jsonErr(res, 403, "Operations team only.");
+  }
+  req.opsUser = u;
   next();
 }
 
@@ -304,7 +442,8 @@ app.post("/api/auth/login", function (req, res) {
   const user = db
     .prepare(
       `SELECT id, email, password_hash, role, property_id, full_name,
-              COALESCE(approval_status, 'active') AS approval_status
+              COALESCE(approval_status, 'active') AS approval_status,
+              staff_title, can_access_mlolongo, can_access_syokimau, is_superadmin
        FROM users WHERE email = ?`
     )
     .get(email);
@@ -336,6 +475,11 @@ app.post("/api/auth/login", function (req, res) {
       role: user.role,
       fullName: user.full_name,
       propertyId: user.property_id,
+      staffTitle: user.staff_title || null,
+      access: {
+        mlolongo: Number(user.can_access_mlolongo) === 1,
+        syokimau: Number(user.can_access_syokimau) === 1,
+      },
     },
   });
 });
@@ -351,13 +495,7 @@ app.get("/api/me", function (req, res) {
     return res.json({ ok: true, user: null });
   }
 
-  const user = db
-    .prepare(
-      `SELECT id, email, role, property_id, full_name,
-              COALESCE(approval_status, 'active') AS approval_status
-       FROM users WHERE id = ?`
-    )
-    .get(req.session.uid);
+  const user = loadUser(req.session.uid);
 
   if (!user) {
     req.session.destroy();
@@ -387,6 +525,13 @@ app.get("/api/me", function (req, res) {
       fullName: user.full_name,
       propertyId: user.property_id,
       approvalStatus: user.approval_status,
+      staffTitle: user.staff_title || null,
+      houseNumber: user.house_number || null,
+      bedrooms: user.bedrooms || null,
+      access: {
+        mlolongo: Number(user.can_access_mlolongo) === 1,
+        syokimau: Number(user.can_access_syokimau) === 1,
+      },
     },
     property,
     mpesa,
@@ -394,28 +539,33 @@ app.get("/api/me", function (req, res) {
 });
 
 app.get("/api/maintenance", requireLogin, function (req, res) {
-  if (req.session.role === "admin") {
-    const rows = db
-      .prepare(
-        `SELECT m.id, m.title, m.description, m.status, m.created_at,
-                p.slug AS property_slug, p.name AS property_name,
-                u.email AS tenant_email
-         FROM maintenance_requests m
-         JOIN properties p ON p.id = m.property_id
-         JOIN users u ON u.id = m.user_id
-         ORDER BY datetime(m.created_at) DESC`
-      )
-      .all();
-    return res.json({ ok: true, requests: rows });
+  var u = loadUser(req.session.uid);
+  if (!u) {
+    return jsonErr(res, 401, "Sign in first.");
+  }
+  if (OPS_ROLES.indexOf(u.role) !== -1) {
+    var pf = propertyFilterForUser(u);
+    var sqlOps =
+      `SELECT m.id, m.title, m.description, m.category, m.priority, m.status, m.created_at,
+              p.slug AS property_slug, p.name AS property_name,
+              u.email AS tenant_email
+       FROM maintenance_requests m
+       JOIN properties p ON p.id = m.property_id
+       JOIN users u ON u.id = m.user_id
+       WHERE 1=1 ` +
+      pf.sql +
+      ` ORDER BY datetime(m.created_at) DESC`;
+    var rowsOps = db.prepare(sqlOps).all(...pf.params);
+    return res.json({ ok: true, requests: rowsOps });
   }
 
-  if (req.session.role !== "tenant") {
+  if (u.role !== "tenant") {
     return jsonErr(res, 403, "Not allowed.");
   }
 
   const rows = db
     .prepare(
-      `SELECT m.id, m.title, m.description, m.status, m.created_at,
+      `SELECT m.id, m.title, m.description, m.category, m.priority, m.status, m.created_at,
               p.slug AS property_slug, p.name AS property_name
        FROM maintenance_requests m
        JOIN properties p ON p.id = m.property_id
@@ -435,6 +585,11 @@ app.post("/api/maintenance", requireTenant, function (req, res) {
 
   const title = (req.body.title || "").trim();
   const description = (req.body.description || "").trim();
+  var category = (req.body.category || "general").trim().slice(0, 64) || "general";
+  var priority = (req.body.priority || "normal").trim();
+  if (["low", "normal", "high", "urgent"].indexOf(priority) === -1) {
+    priority = "normal";
+  }
 
   if (!title) {
     return jsonErr(res, 400, "Title is required.");
@@ -442,20 +597,31 @@ app.post("/api/maintenance", requireTenant, function (req, res) {
 
   const info = db
     .prepare(
-      `INSERT INTO maintenance_requests (property_id, user_id, title, description)
-       VALUES (?, ?, ?, ?)`
+      `INSERT INTO maintenance_requests (property_id, user_id, title, description, category, priority)
+       VALUES (?, ?, ?, ?, ?, ?)`
     )
-    .run(pid, req.session.uid, title, description || null);
+    .run(pid, req.session.uid, title, description || null, category, priority);
 
   res.json({ ok: true, id: info.lastInsertRowid });
 });
 
-app.patch("/api/maintenance/:id", requireAdmin, function (req, res) {
+app.patch("/api/maintenance/:id", requireOperations, function (req, res) {
+  var u = req.opsUser;
   const id = Number(req.params.id);
   const status = (req.body.status || "").trim();
 
   if (!["open", "in_progress", "done"].includes(status)) {
     return jsonErr(res, 400, "Invalid status.");
+  }
+
+  var row = db
+    .prepare("SELECT property_id FROM maintenance_requests WHERE id = ?")
+    .get(id);
+  if (!row) {
+    return jsonErr(res, 404, "Request not found.");
+  }
+  if (!canStaffAccessProperty(u, row.property_id)) {
+    return jsonErr(res, 403, "You cannot update requests for this property.");
   }
 
   const r = db
@@ -470,23 +636,28 @@ app.patch("/api/maintenance/:id", requireAdmin, function (req, res) {
 });
 
 app.get("/api/rent", requireLogin, function (req, res) {
-  if (req.session.role === "admin") {
-    const rows = db
-      .prepare(
-        `SELECT r.id, r.label, r.amount_cents, r.due_date, r.paid_at, r.status,
-                u.email AS tenant_email, p.slug AS property_slug, p.name AS property_name
-         FROM rent_records r
-         JOIN users u ON u.id = r.user_id
-         JOIN properties p ON p.id = r.property_id
-         ORDER BY datetime(r.due_date) DESC`
-      )
-      .all();
-    return res.json({ ok: true, records: rows });
+  var u = loadUser(req.session.uid);
+  if (!u) {
+    return jsonErr(res, 401, "Sign in first.");
+  }
+  if (OPS_ROLES.indexOf(u.role) !== -1) {
+    var pfR = propertyFilterForUser(u);
+    var sqlR =
+      `SELECT r.id, r.label, r.amount_cents, r.water_amount_cents, r.due_date, r.paid_at, r.status,
+              u.email AS tenant_email, p.slug AS property_slug, p.name AS property_name
+       FROM rent_records r
+       JOIN users u ON u.id = r.user_id
+       JOIN properties p ON p.id = r.property_id
+       WHERE 1=1 ` +
+      pfR.sql +
+      ` ORDER BY datetime(r.due_date) DESC`;
+    var rowsR = db.prepare(sqlR).all(...pfR.params);
+    return res.json({ ok: true, records: rowsR });
   }
 
   const rows = db
     .prepare(
-      `SELECT id, label, amount_cents, due_date, paid_at, status
+      `SELECT id, label, amount_cents, water_amount_cents, due_date, paid_at, status
        FROM rent_records
        WHERE user_id = ?
        ORDER BY datetime(due_date) DESC`
@@ -496,25 +667,34 @@ app.get("/api/rent", requireLogin, function (req, res) {
   res.json({ ok: true, records: rows });
 });
 
-app.post("/api/rent/record", requireAdmin, function (req, res) {
+app.post("/api/rent/record", requireOperations, function (req, res) {
+  var u = req.opsUser;
   const userId = Number(req.body.user_id);
   const propertyId = Number(req.body.property_id);
   const label = (req.body.label || "").trim();
   const amountCents = Number(req.body.amount_cents);
+  var waterCents = Number(req.body.water_amount_cents);
   const dueDate = (req.body.due_date || "").trim();
   const paid = Boolean(req.body.paid);
 
+  if (!Number.isFinite(waterCents) || waterCents < 0) {
+    waterCents = 0;
+  }
+
   if (!userId || !propertyId || !label || !dueDate || !Number.isFinite(amountCents)) {
     return jsonErr(res, 400, "Missing or invalid fields.");
+  }
+  if (!canStaffAccessProperty(u, propertyId)) {
+    return jsonErr(res, 403, "You cannot post rent lines for this property.");
   }
 
   const paidAt = paid ? new Date().toISOString().slice(0, 19).replace("T", " ") : null;
   const status = paid ? "paid" : "due";
 
   db.prepare(
-    `INSERT INTO rent_records (user_id, property_id, label, amount_cents, due_date, paid_at, status)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(userId, propertyId, label, amountCents, dueDate, paidAt, status);
+    `INSERT INTO rent_records (user_id, property_id, label, amount_cents, water_amount_cents, due_date, paid_at, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(userId, propertyId, label, amountCents, waterCents, dueDate, paidAt, status);
 
   res.json({ ok: true });
 });
@@ -538,45 +718,63 @@ app.post("/api/admin/users", requireAdmin, function (req, res) {
   }
 
   const hash = bcrypt.hashSync(password, 10);
+  var houseNum = (req.body.house_number || "").trim().slice(0, 64) || null;
+  var beds = (req.body.bedrooms || "").trim().slice(0, 32) || null;
   db.prepare(
-    `INSERT INTO users (email, password_hash, role, property_id, full_name, phone, approval_status)
-     VALUES (?, ?, 'tenant', ?, ?, NULL, 'active')`
-  ).run(email, hash, propertyId, fullName || null);
+    `INSERT INTO users (email, password_hash, role, property_id, full_name, phone, approval_status, house_number, bedrooms)
+     VALUES (?, ?, 'tenant', ?, ?, NULL, 'active', ?, ?)`
+  ).run(email, hash, propertyId, fullName || null, houseNum, beds);
 
   res.json({ ok: true });
 });
 
-app.get("/api/admin/users", requireAdmin, function (req, res) {
-  const rows = db
-    .prepare(
-      `SELECT u.id, u.email, u.full_name, u.phone, u.property_id,
-              COALESCE(u.approval_status, 'active') AS approval_status,
-              p.slug AS property_slug, p.name AS property_name
-       FROM users u
-       LEFT JOIN properties p ON p.id = u.property_id
-       WHERE u.role = 'tenant'
-       ORDER BY u.email`
-    )
-    .all();
+app.get("/api/admin/users", requireOperations, function (req, res) {
+  var u = req.opsUser;
+  var pf = propertyFilterForUser(u);
+  var sqlU =
+    `SELECT u.id, u.email, u.full_name, u.phone, u.property_id,
+            u.house_number, u.bedrooms,
+            COALESCE(u.approval_status, 'active') AS approval_status,
+            p.slug AS property_slug, p.name AS property_name
+     FROM users u
+     LEFT JOIN properties p ON p.id = u.property_id
+     WHERE u.role = 'tenant' ` +
+    pf.sql +
+    ` ORDER BY u.email`;
+  var rows = db.prepare(sqlU).all(...pf.params);
   res.json({ ok: true, users: rows });
 });
 
-app.get("/api/admin/pending-tenants", requireAdmin, function (req, res) {
-  const rows = db
-    .prepare(
-      `SELECT u.id, u.email, u.full_name, u.phone, u.created_at,
-              p.slug AS property_slug, p.name AS property_name
-       FROM users u
-       JOIN properties p ON p.id = u.property_id
-       WHERE u.role = 'tenant' AND COALESCE(u.approval_status, 'active') = 'pending'
-       ORDER BY u.id DESC`
-    )
-    .all();
+app.get("/api/admin/pending-tenants", requireOperations, function (req, res) {
+  var u = req.opsUser;
+  var pf = propertyFilterForUser(u);
+  var sqlP =
+    `SELECT u.id, u.email, u.full_name, u.phone, u.created_at,
+            p.slug AS property_slug, p.name AS property_name
+     FROM users u
+     JOIN properties p ON p.id = u.property_id
+     WHERE u.role = 'tenant' AND COALESCE(u.approval_status, 'active') = 'pending' ` +
+    pf.sql +
+    ` ORDER BY u.id DESC`;
+  var rows = db.prepare(sqlP).all(...pf.params);
   res.json({ ok: true, tenants: rows });
 });
 
-app.post("/api/admin/users/:id/approve", requireAdmin, function (req, res) {
+app.post("/api/admin/users/:id/approve", requireOperations, function (req, res) {
+  var u = req.opsUser;
   const id = Number(req.params.id);
+  var t = db
+    .prepare(
+      `SELECT u.id, u.property_id FROM users u
+       WHERE u.id = ? AND u.role = 'tenant' AND COALESCE(u.approval_status, 'active') = 'pending'`
+    )
+    .get(id);
+  if (!t) {
+    return jsonErr(res, 404, "Pending tenant not found.");
+  }
+  if (!canStaffAccessProperty(u, t.property_id)) {
+    return jsonErr(res, 403, "You cannot approve tenants for this property.");
+  }
   const r = db
     .prepare(
       `UPDATE users SET approval_status = 'active' WHERE id = ? AND role = 'tenant'`
@@ -588,16 +786,362 @@ app.post("/api/admin/users/:id/approve", requireAdmin, function (req, res) {
   res.json({ ok: true });
 });
 
-app.get("/api/admin/messages", requireAdmin, function (req, res) {
-  const rows = db
-    .prepare(
-      `SELECT id, property_slug, name, email, message, created_at
-       FROM contact_messages
-       ORDER BY datetime(created_at) DESC
-       LIMIT 100`
-    )
-    .all();
+app.get("/api/admin/messages", requireOperations, function (req, res) {
+  var u = req.opsUser;
+  var mf = messageFilterForUser(u);
+  var sqlM =
+    `SELECT id, property_slug, name, email, message, created_at
+     FROM contact_messages cm
+     WHERE 1=1 ` +
+    mf.sql +
+    ` ORDER BY datetime(cm.created_at) DESC
+     LIMIT 100`;
+  var rows = db.prepare(sqlM).all(...mf.params);
   res.json({ ok: true, messages: rows });
+});
+
+app.get("/api/staff/summary", requireOperations, function (req, res) {
+  var u = req.opsUser;
+  var pf = propertyFilterForUser(u);
+  var suffix = pf.sql || "";
+
+  var tenantsByProp = db
+    .prepare(
+      `SELECT p.slug, COUNT(*) AS c
+       FROM users u
+       JOIN properties p ON p.id = u.property_id
+       WHERE u.role = 'tenant' AND COALESCE(u.approval_status, 'active') = 'active' ` +
+        suffix +
+        ` GROUP BY p.slug`
+    )
+    .all(...pf.params);
+
+  var pendingMaint = db
+    .prepare(
+      `SELECT COUNT(*) AS c
+       FROM maintenance_requests m
+       JOIN properties p ON p.id = m.property_id
+       WHERE m.status != 'done' ` + suffix
+    )
+    .get(...pf.params).c;
+
+  var arrears = db
+    .prepare(
+      `SELECT COUNT(*) AS c, IFNULL(SUM(r.amount_cents + r.water_amount_cents), 0) AS total_cents
+       FROM rent_records r
+       JOIN properties p ON p.id = r.property_id
+       WHERE r.status IN ('due', 'late') ` + suffix
+    )
+    .get(...pf.params);
+
+  var vacant = db
+    .prepare(
+      `SELECT COUNT(*) AS c
+       FROM units un
+       JOIN properties p ON p.id = un.property_id
+       WHERE un.vacant = 1 ` + suffix
+    )
+    .get(...pf.params);
+
+  res.json({
+    ok: true,
+    summary: {
+      tenantsByProperty: tenantsByProp,
+      openMaintenanceCount: pendingMaint,
+      arrearsCount: arrears.c,
+      arrearsTotalCents: arrears.total_cents,
+      vacantUnits: vacant.c,
+      billing: {
+        currency: "KES",
+        dueDay: 10,
+        graceUntilDay: 12,
+        lateFee: "none",
+      },
+    },
+  });
+});
+
+app.get("/api/staff/units", requireOperations, function (req, res) {
+  var u = req.opsUser;
+  var pf = propertyFilterForUser(u);
+  var sqlUn =
+    `SELECT un.id, un.unit_code, un.bedrooms, un.floor_note, un.monthly_rent_hint_cents, un.vacant,
+            p.slug AS property_slug, p.name AS property_name
+     FROM units un
+     JOIN properties p ON p.id = un.property_id
+     WHERE 1=1 ` +
+    pf.sql +
+    ` ORDER BY p.slug, un.unit_code`;
+  var rows = db.prepare(sqlUn).all(...pf.params);
+  res.json({ ok: true, units: rows });
+});
+
+app.post("/api/staff/units", requireOperations, function (req, res) {
+  var u = req.opsUser;
+  const propertyId = Number(req.body.property_id);
+  const unitCode = (req.body.unit_code || "").trim().slice(0, 32);
+  const bedrooms = (req.body.bedrooms || "").trim().slice(0, 32) || null;
+  const floorNote = (req.body.floor_note || "").trim().slice(0, 120) || null;
+  var hint = Number(req.body.monthly_rent_hint_cents);
+  if (!Number.isFinite(hint)) {
+    hint = null;
+  }
+  const vacant = req.body.vacant === false ? 0 : 1;
+
+  if (!propertyId || !unitCode) {
+    return jsonErr(res, 400, "property_id and unit_code required.");
+  }
+  if (!canStaffAccessProperty(u, propertyId)) {
+    return jsonErr(res, 403, "Not allowed for this property.");
+  }
+
+  try {
+    var info = db
+      .prepare(
+        `INSERT INTO units (property_id, unit_code, bedrooms, floor_note, monthly_rent_hint_cents, vacant)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(propertyId, unitCode, bedrooms, floorNote, hint, vacant);
+    res.json({ ok: true, id: info.lastInsertRowid });
+  } catch (e) {
+    if (e && String(e.message).indexOf("UNIQUE") !== -1) {
+      return jsonErr(res, 409, "That unit code already exists for this property.");
+    }
+    throw e;
+  }
+});
+
+function mapTenantDocument(row) {
+  return {
+    id: row.id,
+    docType: row.doc_type,
+    originalName: row.original_name,
+    mimeType: row.mime_type,
+    sizeBytes: row.size_bytes,
+    createdAt: row.created_at,
+    downloadUrl: "/api/documents/" + row.id + "/file",
+  };
+}
+
+app.get("/api/tenant/documents", requireTenant, function (req, res) {
+  var rows = db
+    .prepare(
+      `SELECT id, doc_type, original_name, mime_type, size_bytes, created_at
+       FROM tenant_documents
+       WHERE user_id = ?
+       ORDER BY datetime(created_at) DESC`
+    )
+    .all(req.session.uid);
+  res.json({
+    ok: true,
+    documents: rows.map(mapTenantDocument),
+  });
+});
+
+app.post(
+  "/api/tenant/documents",
+  uploadLimiter,
+  requireLogin,
+  function (req, res, next) {
+    if (req.session.role !== "tenant") {
+      return jsonErr(res, 403, "Tenants only.");
+    }
+    next();
+  },
+  wrapUpload(tenantDocUpload.single("file")),
+  function (req, res) {
+    var docType = (req.body.doc_type || "").trim();
+    if (["national_id", "lease_signed"].indexOf(docType) === -1) {
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (e) {}
+      }
+      return jsonErr(res, 400, "doc_type must be national_id or lease_signed.");
+    }
+    if (!req.file) {
+      return jsonErr(res, 400, "Choose a PDF or image file.");
+    }
+    try {
+      var info = db
+        .prepare(
+          `INSERT INTO tenant_documents (user_id, doc_type, stored_name, original_name, mime_type, size_bytes, uploaded_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          req.session.uid,
+          docType,
+          req.file.filename,
+          String(req.file.originalname || "").slice(0, 255),
+          req.file.mimetype,
+          req.file.size,
+          req.session.uid
+        );
+      res.json({ ok: true, id: info.lastInsertRowid });
+    } catch (e) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (e2) {}
+      throw e;
+    }
+  }
+);
+
+app.get("/api/staff/tenants/:tenantId/documents", requireOperations, function (req, res) {
+  var u = req.opsUser;
+  var tenantId = Number(req.params.tenantId);
+  if (!tenantId) {
+    return jsonErr(res, 400, "Invalid tenant.");
+  }
+  if (!canOpsAccessTenant(u, tenantId)) {
+    return jsonErr(res, 403, "Not allowed for this tenant.");
+  }
+  var rows = db
+    .prepare(
+      `SELECT id, doc_type, original_name, mime_type, size_bytes, created_at
+       FROM tenant_documents
+       WHERE user_id = ?
+       ORDER BY datetime(created_at) DESC`
+    )
+    .all(tenantId);
+  res.json({
+    ok: true,
+    tenantId: tenantId,
+    documents: rows.map(mapTenantDocument),
+  });
+});
+
+app.post(
+  "/api/staff/tenants/:tenantId/documents",
+  uploadLimiter,
+  requireOperations,
+  wrapUpload(tenantDocUpload.single("file")),
+  function (req, res) {
+    var u = req.opsUser;
+    var tenantId = Number(req.params.tenantId);
+    var docType = (req.body.doc_type || "").trim();
+    if (!tenantId) {
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (e) {}
+      }
+      return jsonErr(res, 400, "Invalid tenant.");
+    }
+    if (
+      ["national_id", "lease_template", "lease_signed"].indexOf(docType) === -1
+    ) {
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (e) {}
+      }
+      return jsonErr(
+        res,
+        400,
+        "doc_type must be national_id, lease_template, or lease_signed."
+      );
+    }
+    if (!canOpsAccessTenant(u, tenantId)) {
+      if (req.file && req.file.path) {
+        try {
+          fs.unlinkSync(req.file.path);
+        } catch (e) {}
+      }
+      return jsonErr(res, 403, "Not allowed for this tenant.");
+    }
+    if (!req.file) {
+      return jsonErr(res, 400, "Choose a PDF or image file.");
+    }
+    try {
+      var info = db
+        .prepare(
+          `INSERT INTO tenant_documents (user_id, doc_type, stored_name, original_name, mime_type, size_bytes, uploaded_by)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          tenantId,
+          docType,
+          req.file.filename,
+          String(req.file.originalname || "").slice(0, 255),
+          req.file.mimetype,
+          req.file.size,
+          u.id
+        );
+      res.json({ ok: true, id: info.lastInsertRowid });
+    } catch (e) {
+      try {
+        fs.unlinkSync(req.file.path);
+      } catch (e2) {}
+      throw e;
+    }
+  }
+);
+
+app.patch("/api/staff/tenants/:tenantId/profile", requireOperations, function (req, res) {
+  var u = req.opsUser;
+  var tenantId = Number(req.params.tenantId);
+  if (!tenantId) {
+    return jsonErr(res, 400, "Invalid tenant.");
+  }
+  if (!canOpsAccessTenant(u, tenantId)) {
+    return jsonErr(res, 403, "Not allowed for this tenant.");
+  }
+  var house = (req.body.house_number || "").trim().slice(0, 64) || null;
+  var beds = (req.body.bedrooms || "").trim().slice(0, 32) || null;
+  db.prepare(
+    "UPDATE users SET house_number = ?, bedrooms = ? WHERE id = ? AND role = 'tenant'"
+  ).run(house, beds, tenantId);
+  res.json({ ok: true });
+});
+
+app.get("/api/documents/:id/file", requireLogin, function (req, res) {
+  var docId = Number(req.params.id);
+  if (!docId) {
+    return jsonErr(res, 400, "Invalid document.");
+  }
+  var row = db
+    .prepare(
+      `SELECT d.id, d.stored_name, d.mime_type, d.original_name, d.user_id AS owner_id,
+              u.role AS owner_role, u.property_id
+       FROM tenant_documents d
+       JOIN users u ON u.id = d.user_id
+       WHERE d.id = ?`
+    )
+    .get(docId);
+  if (!row || !safeStoredName(row.stored_name)) {
+    return jsonErr(res, 404, "Not found.");
+  }
+  var viewer = loadUser(req.session.uid);
+  if (!viewer) {
+    return jsonErr(res, 401, "Sign in first.");
+  }
+  var allowed = false;
+  if (viewer.role === "tenant" && row.owner_id === viewer.id) {
+    allowed = true;
+  } else if (OPS_ROLES.indexOf(viewer.role) !== -1) {
+    allowed = canOpsAccessTenant(viewer, row.owner_id);
+  }
+  if (!allowed) {
+    return jsonErr(res, 403, "Not allowed.");
+  }
+  var root = path.resolve(uploadDirRoot());
+  var base = path.basename(row.stored_name);
+  var full = path.resolve(path.join(root, base));
+  var rel = path.relative(root, full);
+  if (rel.startsWith("..") || path.isAbsolute(rel) || base !== row.stored_name) {
+    return jsonErr(res, 404, "Not found.");
+  }
+  if (!fs.existsSync(full)) {
+    return jsonErr(res, 404, "File missing on server.");
+  }
+  var disp = row.original_name || base;
+  res.setHeader("Content-Type", row.mime_type || "application/octet-stream");
+  res.setHeader(
+    "Content-Disposition",
+    "attachment; filename=" + JSON.stringify(disp)
+  );
+  fs.createReadStream(full).pipe(res);
 });
 
 app.use(express.static(path.join(__dirname, "public")));
@@ -608,6 +1152,10 @@ app.use(function (req, res) {
   }
   res.status(404).send("Not found.");
 });
+
+if (process.env.DISABLE_REMINDERS !== "1") {
+  startReminders(getDb, sendSms);
+}
 
 app.listen(PORT, function () {
   console.log("JUJO Residence server on http://localhost:" + PORT);

@@ -31,6 +31,7 @@
         <header class="dash-header">
             <h1>Your account</h1>
             <p class="dash-sub" id="property-line"></p>
+            <p class="muted" id="unit-line" style="font-size:0.9rem;margin-top:-0.5rem;display:none;"></p>
             <div class="dash-toolbar">
                 <span class="muted" style="font-size:0.9rem;">Rent lines and requests are office-entered unless you’ve been told otherwise.</span>
             </div>
@@ -58,10 +59,34 @@
             <h2 id="rent-heading">Rent schedule</h2>
             <div class="table-wrap">
                 <table class="data" id="rent-table">
-                    <thead><tr><th>Period</th><th>Due</th><th>Amount</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Period</th><th>Due</th><th>Rent</th><th>Water</th><th>Status</th></tr></thead>
                     <tbody></tbody>
                 </table>
             </div>
+        </section>
+
+        <section class="panel" aria-labelledby="docs-heading">
+            <h2 id="docs-heading">ID &amp; lease documents</h2>
+            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">Upload a PDF or clear photo of your national ID or passport, and your signed lease when the office sends you the template. Only you and authorised staff can download these files.</p>
+            <div class="table-wrap">
+                <table class="data" id="docs-table">
+                    <thead><tr><th>Type</th><th>File</th><th>Uploaded</th><th></th></tr></thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+            <p class="muted" id="docs-empty" style="font-size:0.9rem;margin-top:0.75rem;display:none;">No uploads yet.</p>
+            <h3 class="sub">Upload</h3>
+            <form id="docs-form" class="form-stack">
+                <label>Document type
+                    <select name="doc_type" id="docs-type" required>
+                        <option value="national_id">National ID or passport</option>
+                        <option value="lease_signed">Signed lease</option>
+                    </select>
+                </label>
+                <label>File (PDF, JPG, or PNG, max ~12&nbsp;MB) <input type="file" name="file" id="docs-file" required accept=".pdf,.jpg,.jpeg,.png,image/*,application/pdf"></label>
+                <button type="submit" class="btn">Upload</button>
+                <p id="docs-msg" class="form-msg"></p>
+            </form>
         </section>
 
         <section class="panel" aria-labelledby="maint-heading">
@@ -132,6 +157,18 @@
         } else {
           pl.textContent = "No property linked — contact the office.";
         }
+        var ul = document.getElementById("unit-line");
+        if (data.user.houseNumber || data.user.bedrooms) {
+          ul.style.display = "block";
+          ul.textContent =
+            "Unit on file: " +
+            (data.user.houseNumber || "—") +
+            " · Bedrooms: " +
+            (data.user.bedrooms || "—") +
+            " (contact the office to correct).";
+        } else {
+          ul.style.display = "none";
+        }
         var mw = document.getElementById("tenant-mpesa-wrap");
         if (data.mpesa && mw) {
           mw.hidden = false;
@@ -151,12 +188,18 @@
               return r.json();
             }
           ),
+          fetch("/api/tenant/documents", { credentials: "same-origin" }).then(
+            function (r) {
+              return r.json();
+            }
+          ),
         ]);
       })
-      .then(function (pair) {
-        if (!pair) return;
-        var rent = pair[0];
-        var maint = pair[1];
+      .then(function (triple) {
+        if (!triple) return;
+        var rent = triple[0];
+        var maint = triple[1];
+        var docs = triple[2];
         var rt = document.querySelector("#rent-table tbody");
         rt.innerHTML = "";
         (rent.records || []).forEach(function (row) {
@@ -172,9 +215,13 @@
           td1.textContent = row.due_date;
           var td2 = document.createElement("td");
           td2.textContent = kes(row.amount_cents);
+          var tdW = document.createElement("td");
+          var w = Number(row.water_amount_cents) || 0;
+          tdW.textContent = w ? kes(w) : "—";
           tr.appendChild(td0);
           tr.appendChild(td1);
           tr.appendChild(td2);
+          tr.appendChild(tdW);
           tr.appendChild(tdS);
           rt.appendChild(tr);
         });
@@ -196,6 +243,41 @@
           tr.appendChild(td2);
           mt.appendChild(tr);
         });
+        var docLabels = {
+          national_id: "ID / passport",
+          lease_template: "Lease template",
+          lease_signed: "Signed lease",
+        };
+        var dt = document.querySelector("#docs-table tbody");
+        var dempty = document.getElementById("docs-empty");
+        dt.innerHTML = "";
+        var dlist = (docs && docs.documents) || [];
+        if (dlist.length === 0) {
+          dempty.style.display = "block";
+        } else {
+          dempty.style.display = "none";
+          dlist.forEach(function (d) {
+            var tr = document.createElement("tr");
+            var t0 = document.createElement("td");
+            t0.textContent = docLabels[d.docType] || d.docType;
+            tr.appendChild(t0);
+            var t1 = document.createElement("td");
+            t1.textContent = d.originalName || "—";
+            tr.appendChild(t1);
+            var t2 = document.createElement("td");
+            t2.textContent = d.createdAt || "—";
+            tr.appendChild(t2);
+            var t3 = document.createElement("td");
+            var a = document.createElement("a");
+            a.href = d.downloadUrl;
+            a.className = "btn btn-secondary";
+            a.textContent = "Download";
+            a.setAttribute("download", "");
+            t3.appendChild(a);
+            tr.appendChild(t3);
+            dt.appendChild(tr);
+          });
+        }
       })
       .catch(function () {
         window.location.href = "login.html";
@@ -209,6 +291,42 @@
     }).then(function () {
       window.location.href = "index.html";
     });
+  });
+
+  document.getElementById("docs-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var msg = document.getElementById("docs-msg");
+    var fileEl = document.getElementById("docs-file");
+    if (!fileEl.files || !fileEl.files[0]) {
+      msg.className = "form-msg err";
+      msg.textContent = "Choose a file.";
+      return;
+    }
+    var fd = new FormData();
+    fd.append("file", fileEl.files[0]);
+    fd.append("doc_type", document.getElementById("docs-type").value);
+    fetch("/api/tenant/documents", {
+      method: "POST",
+      credentials: "same-origin",
+      body: fd,
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        msg.className = "form-msg " + (x.ok ? "ok" : "err");
+        msg.textContent = x.ok ? "Uploaded." : x.j.error || "Upload failed.";
+        if (x.ok) {
+          e.target.reset();
+          load();
+        }
+      })
+      .catch(function () {
+        msg.className = "form-msg err";
+        msg.textContent = "Network error.";
+      });
   });
 
   document.getElementById("maint-form").addEventListener("submit", function (e) {
