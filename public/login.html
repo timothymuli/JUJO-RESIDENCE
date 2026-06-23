@@ -30,7 +30,9 @@
             <h1>Sign in</h1>
             <p class="lead">Tenants see rent and maintenance; administrators see the full desk. New here? <a href="register.html">Register</a> with your Safaricom number (SMS code). Otherwise sign in below.</p>
             <form id="login-form" class="form-stack">
-                <label>Work email <input type="email" name="email" required autocomplete="username"></label>
+                <label>Email or phone
+                    <input type="text" name="email" required autocomplete="username" placeholder="tenants &amp; admin use email; caretakers use 07… or 254…">
+                </label>
                 <label>Password <input type="password" name="password" required autocomplete="current-password"></label>
                 <button type="submit" class="btn" style="width:100%;max-width:32rem;">Continue</button>
                 <p id="login-msg" class="form-msg"></p>
@@ -38,8 +40,8 @@
             <details class="login-hint">
                 <summary>Demo credentials (development only)</summary>
                 <p style="margin:0.75rem 0 0;line-height:1.55;">Tenants: <code>sam@mlolongo.demo</code> / <code>tenant123</code> · <code>pat@syokimau.demo</code> / <code>tenant123</code><br>
-                Admin: <code>timothymuli76@gmail.com</code> · Landlord: <code>philipmasai95@gmail.com</code> (<code>masai/123</code>)<br>
-                Caretakers: <code>boniface.kiilu@jujo.local</code>, <code>denis.mwanzia@jujo.local</code>, <code>christopher.mutisya@jujo.local</code>, <code>boniface.mubweka@jujo.local</code> — password <code>staff123</code></p>
+                Admin: <code>timothymuli76@gmail.com</code> / <code>muli/123</code> · Landlord: <code>philipmasai95@gmail.com</code> / <code>masai/123</code><br>
+                Caretakers (phone + <code>staff123</code>): <code>0745909444</code>, <code>0727731996</code>, <code>0711475919</code>, <code>0723161584</code></p>
             </details>
         </div>
     </main>

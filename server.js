@@ -441,24 +441,38 @@ app.post("/api/auth/register/verify", registerLimiter, function (req, res) {
 });
 
 app.post("/api/auth/login", function (req, res) {
-  const email = (req.body.email || "").trim().toLowerCase();
+  const loginId = (req.body.email || req.body.login || "").trim();
   const password = req.body.password || "";
 
-  if (!email || !password) {
-    return jsonErr(res, 400, "Email and password required.");
+  if (!loginId || !password) {
+    return jsonErr(res, 400, "Email or phone and password required.");
   }
 
-  const user = db
-    .prepare(
-      `SELECT id, email, password_hash, role, property_id, full_name,
-              COALESCE(approval_status, 'active') AS approval_status,
-              staff_title, can_access_mlolongo, can_access_syokimau, is_superadmin
-       FROM users WHERE email = ?`
-    )
-    .get(email);
+  var user = null;
+  const phone = normalizeKePhone(loginId);
+  if (phone) {
+    user = db
+      .prepare(
+        `SELECT id, email, password_hash, role, property_id, full_name, phone,
+                COALESCE(approval_status, 'active') AS approval_status,
+                staff_title, can_access_mlolongo, can_access_syokimau, is_superadmin
+         FROM users WHERE phone = ?`
+      )
+      .get(phone);
+  }
+  if (!user && loginId.indexOf("@") !== -1) {
+    user = db
+      .prepare(
+        `SELECT id, email, password_hash, role, property_id, full_name, phone,
+                COALESCE(approval_status, 'active') AS approval_status,
+                staff_title, can_access_mlolongo, can_access_syokimau, is_superadmin
+         FROM users WHERE email = ?`
+      )
+      .get(loginId.toLowerCase());
+  }
 
   if (!user || !bcrypt.compareSync(password, user.password_hash)) {
-    return jsonErr(res, 401, "Wrong email or password.");
+    return jsonErr(res, 401, "Wrong email/phone or password.");
   }
 
   if (user.role === "tenant" && user.approval_status === "pending") {

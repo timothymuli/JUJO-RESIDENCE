@@ -21,7 +21,7 @@ Edit `.env` for `CONTACT_PHONE`, `CONTACT_EMAIL`, and change `ADMIN_PASSWORD` an
 
 | Role   | Email               | Password     |
 |--------|---------------------|--------------|
-| Admin  | `timothymuli76@gmail.com`  | Value of `ADMIN_PASSWORD` in `.env` (default `changeme123`) |
+| Admin  | `timothymuli76@gmail.com`  | `muli/123` |
 | Tenant | `sam@mlolongo.demo` | `tenant123`  |
 | Tenant | `pat@syokimau.demo` | `tenant123`  |
 
@@ -39,10 +39,10 @@ First run creates `data/jujo.db` and seeds demo data. Delete `data/jujo.db` to r
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | `timothymuli76@gmail.com` | `ADMIN_PASSWORD` (default `changeme123`) |
-| Landlord | `philipmasai95@gmail.com` | `LANDLORD_PASSWORD` (default `masai/123`) |
-| Caretaker Mlolongo | `boniface.kiilu@jujo.local`, `denis.mwanzia@jujo.local` | `STAFF_PASSWORD` (default `staff123`) |
-| Caretaker Syokimau | `christopher.mutisya@jujo.local`, `boniface.mubweka@jujo.local` | same |
+| Admin | `timothymuli76@gmail.com` | `muli/123` (or `ADMIN_PASSWORD` in `.env`) |
+| Landlord | `philipmasai95@gmail.com` | `masai/123` |
+| Caretaker Mlolongo | phone `0745909444`, `0727731996` | `staff123` |
+| Caretaker Syokimau | phone `0711475919`, `0723161584` | `staff123` |
 
 Phones match `CARETAKER_SMS_MLOLONGO` and `CARETAKER_SMS_SYOKIMAU` in `.env`. Team records refresh on each server start.
 
