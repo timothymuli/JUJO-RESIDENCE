@@ -21,7 +21,7 @@ Edit `.env` for `CONTACT_PHONE`, `CONTACT_EMAIL`, and change `ADMIN_PASSWORD` an
 
 | Role   | Email               | Password     |
 |--------|---------------------|--------------|
-| Admin  | `admin@jujo.local`  | Value of `ADMIN_PASSWORD` in `.env` (default `changeme123`) |
+| Admin  | `timothymuli76@gmail.com`  | Value of `ADMIN_PASSWORD` in `.env` (default `changeme123`) |
 | Tenant | `sam@mlolongo.demo` | `tenant123`  |
 | Tenant | `pat@syokimau.demo` | `tenant123`  |
 
@@ -39,11 +39,12 @@ First run creates `data/jujo.db` and seeds demo data. Delete `data/jujo.db` to r
 
 | Role | Email | Password |
 |------|-------|----------|
-| Landlord | `landlord@jujo.local` | `STAFF_PASSWORD` (default `staff123`) |
-| Caretaker Mlolongo | `caretaker.ml1@jujo.local`, `caretaker.ml2@jujo.local` | same |
-| Caretaker Syokimau | `caretaker.sy1@jujo.local`, `caretaker.sy2@jujo.local` | same |
+| Admin | `timothymuli76@gmail.com` | `ADMIN_PASSWORD` (default `changeme123`) |
+| Landlord | `philipmasai95@gmail.com` | `LANDLORD_PASSWORD` (default `masai/123`) |
+| Caretaker Mlolongo | `boniface.kiilu@jujo.local`, `denis.mwanzia@jujo.local` | `STAFF_PASSWORD` (default `staff123`) |
+| Caretaker Syokimau | `christopher.mutisya@jujo.local`, `boniface.mubweka@jujo.local` | same |
 
-Phones match `CARETAKER_SMS_MLOLONGO` and `CARETAKER_SMS_SYOKIMAU` in `.env`.
+Phones match `CARETAKER_SMS_MLOLONGO` and `CARETAKER_SMS_SYOKIMAU` in `.env`. Team records refresh on each server start.
 
 ## Deploy on Render (free — works on phone)
 
@@ -58,7 +59,7 @@ The whole app (pages + API + database) runs as one service on [Render](https://r
 
 | Role   | Email               | Password                          |
 |--------|---------------------|-----------------------------------|
-| Admin  | `admin@jujo.local`  | Value you set for `ADMIN_PASSWORD` |
+| Admin  | `timothymuli76@gmail.com`  | Value you set for `ADMIN_PASSWORD` |
 | Tenant | `sam@mlolongo.demo` | `tenant123`                       |
 
 With `SMS_MOCK=1` (default on Render), registration shows the OTP on screen and in Render logs.
