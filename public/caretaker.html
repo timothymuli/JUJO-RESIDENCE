@@ -107,6 +107,7 @@
                             <th>Rent</th>
                             <th>Water</th>
                             <th>Status</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -184,6 +185,8 @@
     <script src="script.js"></script>
     <script>
 (function () {
+  var canConfirm = false;
+
   function kes(cents) {
     try {
       return new Intl.NumberFormat("en-KE", {
@@ -262,7 +265,8 @@
           window.location.href = "login.html";
           return null;
         }
-        document.getElementById("whoami").textContent = data.user.email;
+        document.getElementById("whoami").textContent = data.user.phone || data.user.email;
+        canConfirm = Boolean(data.user.canConfirmPayments);
         fetch("/api/staff/summary", { credentials: "same-origin" })
           .then(function (r) {
             return r.json();
@@ -430,6 +434,25 @@
           span.textContent = row.status;
           tdSt.appendChild(span);
           tr.appendChild(tdSt);
+          var tdAct = document.createElement("td");
+          if ((row.status === "due" || row.status === "late") && canConfirm) {
+            var mb = document.createElement("button");
+            mb.type = "button";
+            mb.className = "btn btn-secondary";
+            mb.textContent = "Confirm Paybill";
+            mb.addEventListener("click", function () {
+              fetch("/api/rent/" + row.id + "/mark-paid", {
+                method: "PATCH",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mpesa_receipt: "PAYBILL" }),
+              }).then(function () {
+                loadTables();
+              });
+            });
+            tdAct.appendChild(mb);
+          }
+          tr.appendChild(tdAct);
           rt.appendChild(tr);
         });
       })

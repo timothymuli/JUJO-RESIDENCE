@@ -14,7 +14,7 @@ const bcrypt = require("bcryptjs");
 const { initDb, getDb } = require("./lib/db");
 const { normalizeKePhone } = require("./lib/phone");
 const { sendSms } = require("./lib/sms");
-const { startReminders } = require("./lib/reminders");
+const { startReminders, rentReminderText } = require("./lib/reminders");
 const { tenantDocUpload, uploadDirRoot, ensureUploadDir } = require("./lib/tenantUploads");
 const { isMock, stkPush, parseStkCallback } = require("./lib/mpesa");
 const {
@@ -132,13 +132,21 @@ function requireTenant(req, res, next) {
 
 var OPS_ROLES = ["admin", "landlord", "caretaker", "accountant"];
 
+function canConfirmRent(user) {
+  if (!user) return false;
+  if (user.role === "admin" || user.role === "landlord" || user.role === "accountant") {
+    return true;
+  }
+  return Number(user.can_confirm_payments) === 1;
+}
+
 function loadUser(id) {
   return db
     .prepare(
       `SELECT id, email, password_hash, role, property_id, full_name, phone,
               COALESCE(approval_status, 'active') AS approval_status,
               staff_title, can_access_mlolongo, can_access_syokimau, is_superadmin,
-              house_number, bedrooms
+              house_number, bedrooms, can_confirm_payments
        FROM users WHERE id = ?`
     )
     .get(id);
@@ -555,6 +563,7 @@ app.get("/api/me", function (req, res) {
         mlolongo: Number(user.can_access_mlolongo) === 1,
         syokimau: Number(user.can_access_syokimau) === 1,
       },
+      canConfirmPayments: canConfirmRent(user),
     },
     property,
     mpesa,
@@ -710,6 +719,13 @@ app.post("/api/rent/record", requireOperations, function (req, res) {
   if (!canStaffAccessProperty(u, propertyId)) {
     return jsonErr(res, 403, "You cannot post rent lines for this property.");
   }
+  if (paid && !canConfirmRent(u)) {
+    return jsonErr(
+      res,
+      403,
+      "Only Boniface Kiilu, Christopher Mutisya, admin, or landlord can confirm Paybill payments."
+    );
+  }
 
   const paidAt = paid ? new Date().toISOString().slice(0, 19).replace("T", " ") : null;
   const status = paid ? "paid" : "due";
@@ -720,6 +736,124 @@ app.post("/api/rent/record", requireOperations, function (req, res) {
   ).run(userId, propertyId, label, amountCents, waterCents, dueDate, paidAt, status);
 
   res.json({ ok: true });
+});
+
+app.patch("/api/rent/:id/mark-paid", requireOperations, function (req, res) {
+  var u = req.opsUser;
+  if (!canConfirmRent(u)) {
+    return jsonErr(
+      res,
+      403,
+      "You are not authorised to confirm Paybill rent payments."
+    );
+  }
+  const rentId = Number(req.params.id);
+  const row = db
+    .prepare(
+      `SELECT r.id, r.property_id, r.status
+       FROM rent_records r WHERE r.id = ?`
+    )
+    .get(rentId);
+  if (!row) {
+    return jsonErr(res, 404, "Rent line not found.");
+  }
+  if (!canStaffAccessProperty(u, row.property_id)) {
+    return jsonErr(res, 403, "Not your property.");
+  }
+  if (row.status === "paid") {
+    return jsonErr(res, 400, "Already marked paid.");
+  }
+  const receipt = (req.body.mpesa_receipt || "PAYBILL").trim().slice(0, 64);
+  markRentPaid(db, rentId, receipt, "paybill_manual");
+  res.json({ ok: true });
+});
+
+app.post("/api/ops/stk-push", requireLogin, function (req, res) {
+  var u = loadUser(req.session.uid);
+  if (!u || (u.role !== "admin" && u.role !== "landlord")) {
+    return jsonErr(res, 403, "Admin or landlord only.");
+  }
+  const amountKes = Math.round(Number(req.body.amount_kes));
+  const tenantId = Number(req.body.user_id);
+  const rentId = Number(req.body.rent_record_id) || 0;
+  let phone = null;
+  if (tenantId) {
+    const t = loadUser(tenantId);
+    if (!t || t.role !== "tenant") {
+      return jsonErr(res, 400, "Invalid tenant user ID.");
+    }
+    phone = normalizeKePhone(t.phone || req.body.phone || "");
+  } else {
+    phone = normalizeKePhone(req.body.phone || "");
+  }
+  if (!phone || amountKes < 1) {
+    return jsonErr(res, 400, "Tenant phone (or user ID) and amount required.");
+  }
+
+  const ref = rentId > 0 ? "R" + rentId : "OPS" + (tenantId || "0");
+  stkPush({
+    phone: phone,
+    amountKes: amountKes,
+    rentId: rentId > 0 ? rentId : ref,
+    description: (req.body.label || "JUJO payment").slice(0, 50),
+    accountRef: ref,
+  })
+    .then(function (stk) {
+      if (!stk.ok) {
+        return jsonErr(res, 502, stk.error || "STK failed.");
+      }
+      db.prepare(
+        `INSERT INTO mpesa_payments (
+           rent_record_id, user_id, phone, amount_cents,
+           checkout_request_id, merchant_request_id, status, source
+         ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`
+      ).run(
+        rentId > 0 ? rentId : null,
+        tenantId || null,
+        phone,
+        amountKes * 100,
+        stk.CheckoutRequestID,
+        stk.MerchantRequestID,
+        stk.mock ? "stk_mock_ops" : "stk_ops"
+      );
+      if (stk.mock && rentId > 0) {
+        setTimeout(function () {
+          applyStkSuccess({
+            rentId: rentId,
+            checkoutRequestId: stk.CheckoutRequestID,
+            mpesaReceipt: "MOCK-OPS",
+            mock: true,
+          });
+        }, 2500);
+      }
+      res.json({
+        ok: true,
+        mock: Boolean(stk.mock),
+        message: stk.mock
+          ? "Demo: STK simulated."
+          : "M-Pesa prompt sent to " + phone + ".",
+      });
+    })
+    .catch(function (err) {
+      console.error("[ops STK]", err);
+      jsonErr(res, 502, "M-Pesa error.");
+    });
+});
+
+app.post("/api/admin/test-sms", requireAdmin, function (req, res) {
+  const phone = normalizeKePhone(req.body.phone || "");
+  if (!phone) {
+    return jsonErr(res, 400, "Valid phone required.");
+  }
+  const text = rentReminderText();
+  sendSms(phone, text).then(function (r) {
+    res.json({
+      ok: true,
+      mock: Boolean(r.mock),
+      text: text,
+      to: phone,
+    });
+  });
 });
 
 function applyStkSuccess(opts) {
@@ -1061,6 +1195,7 @@ app.get("/api/staff/summary", requireOperations, function (req, res) {
       vacantUnits: vacant.c,
       billing: {
         currency: "KES",
+        reminderDay: 1,
         dueDay: 10,
         graceUntilDay: 12,
         lateFee: "none",

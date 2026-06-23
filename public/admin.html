@@ -107,6 +107,7 @@
                             <th>Rent</th>
                             <th>Water</th>
                             <th>Status</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody></tbody>
@@ -175,6 +176,29 @@
         </div>
 
         <div class="panel">
+            <h2>Send M-Pesa prompt (STK)</h2>
+            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">Admin or landlord: prompt any amount on a tenant’s phone. Link a rent line ID to auto-mark paid when they accept.</p>
+            <form id="stk-ops-form" class="form-stack">
+                <label>Tenant user ID <input type="number" name="user_id" min="1" placeholder="from rent table"></label>
+                <label>Or phone <input type="text" name="phone" placeholder="07… or 254…"></label>
+                <label>Rent line ID (optional) <input type="number" name="rent_record_id" min="1" placeholder="auto-mark paid"></label>
+                <label>Amount (KES) <input type="number" name="amount_kes" required min="1"></label>
+                <label>Note <input type="text" name="label" maxlength="50" placeholder="e.g. June rent + water"></label>
+                <button type="submit" class="btn">Send STK prompt</button>
+                <p id="stk-ops-msg" class="form-msg"></p>
+            </form>
+        </div>
+
+        <div class="panel">
+            <h2>Test rent reminder SMS</h2>
+            <form id="test-sms-form" class="form-stack" style="max-width:24rem;">
+                <label>Phone <input type="text" name="phone" value="254758981679" required></label>
+                <button type="submit" class="btn btn-secondary">Send sample reminder</button>
+                <p id="test-sms-msg" class="form-msg"></p>
+            </form>
+        </div>
+
+        <div class="panel">
             <h2>Add rent line</h2>
             <form id="rent-form" class="form-stack">
                 <label>Tenant user ID <input type="number" name="user_id" required min="1"></label>
@@ -201,6 +225,8 @@
     <script src="script.js"></script>
     <script>
 (function () {
+  var canConfirm = false;
+
   function kes(cents) {
     try {
       return new Intl.NumberFormat("en-KE", {
@@ -277,6 +303,7 @@
           return null;
         }
         document.getElementById("whoami").textContent = data.user.email;
+        canConfirm = Boolean(data.user.canConfirmPayments);
         fetch("/api/staff/summary", { credentials: "same-origin" })
           .then(function (r) {
             return r.json();
@@ -445,6 +472,27 @@
           span.textContent = row.status;
           tdSt.appendChild(span);
           tr.appendChild(tdSt);
+          var tdAct = document.createElement("td");
+          if ((row.status === "due" || row.status === "late") && canConfirm) {
+            var mb = document.createElement("button");
+            mb.type = "button";
+            mb.className = "btn btn-secondary";
+            mb.textContent = "Confirm Paybill";
+            mb.title = "Rent + water received via Paybill";
+            mb.addEventListener("click", function () {
+              var rcpt = window.prompt("M-Pesa receipt (optional):") || "PAYBILL";
+              fetch("/api/rent/" + row.id + "/mark-paid", {
+                method: "PATCH",
+                credentials: "same-origin",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ mpesa_receipt: rcpt }),
+              }).then(function () {
+                loadTables();
+              });
+            });
+            tdAct.appendChild(mb);
+          }
+          tr.appendChild(tdAct);
           rt.appendChild(tr);
         });
       })
@@ -488,6 +536,60 @@
         msg.className = "form-msg " + (x.ok ? "ok" : "err");
         msg.textContent = x.ok ? "Tenant created." : x.j.error || "Failed.";
         if (x.ok) e.target.reset();
+      });
+  });
+
+  document.getElementById("stk-ops-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var msg = document.getElementById("stk-ops-msg");
+    fetch("/api/ops/stk-push", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: Number(fd.get("user_id")) || undefined,
+        phone: fd.get("phone") || "",
+        rent_record_id: Number(fd.get("rent_record_id")) || undefined,
+        amount_kes: Number(fd.get("amount_kes")),
+        label: fd.get("label") || "",
+      }),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        msg.className = "form-msg " + (x.ok ? "ok" : "err");
+        msg.textContent = x.ok ? x.j.message || "Sent." : x.j.error || "Failed.";
+      });
+  });
+
+  document.getElementById("test-sms-form").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    var msg = document.getElementById("test-sms-msg");
+    fetch("/api/admin/test-sms", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phone: fd.get("phone") }),
+    })
+      .then(function (r) {
+        return r.json().then(function (j) {
+          return { ok: r.ok, j: j };
+        });
+      })
+      .then(function (x) {
+        msg.className = "form-msg " + (x.ok ? "ok" : "err");
+        if (!x.ok) {
+          msg.textContent = x.j.error || "Failed.";
+          return;
+        }
+        msg.textContent = x.j.mock
+          ? "Mock mode — check server logs. Text: " + x.j.text
+          : "Sent: " + x.j.text;
       });
   });
 
