@@ -18,6 +18,8 @@ services:
         generateValue: true
       - key: SMS_MOCK
         value: "1"
+      - key: MPESA_MOCK
+        value: "1"
       - key: DISABLE_REMINDERS
         value: "0"
       - key: REMINDER_TZ
@@ -26,3 +28,5 @@ services:
         sync: false
       - key: SUPERADMIN_EMAILS
         value: admin@jujo.local
+      - key: STAFF_PASSWORD
+        sync: false

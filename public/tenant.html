@@ -38,8 +38,8 @@
         </header>
 
         <section class="panel" id="tenant-mpesa-wrap" hidden aria-labelledby="mpesa-tenant-h">
-            <h2 id="mpesa-tenant-h">Pay rent (M-Pesa Paybill)</h2>
-            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">Use only the details for your building. Wrong paybill delays allocation.</p>
+            <h2 id="mpesa-tenant-h">Pay rent (M-Pesa)</h2>
+            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">Tap <strong>Pay now</strong> on a due line to get an STK prompt on your phone, or pay manually via Paybill below.</p>
             <div class="mpesa-box" style="margin:0;">
                 <p style="margin:0 0 0.5rem;font-size:0.9rem;" id="mpesa-tenant-label"></p>
                 <dl>
@@ -48,18 +48,20 @@
                     <dt>Account number</dt>
                     <dd id="mpesa-tenant-account">—</dd>
                 </dl>
+                <p class="muted" style="font-size:0.85rem;margin:0.75rem 0 0;">Manual Paybill: use account <strong>R</strong> plus rent line ID (shown on Pay now), e.g. <code>R5</code>, or your house unit — payment is matched automatically.</p>
                 <ol style="margin-top:0.75rem;">
                     <li>M-Pesa → Lipa na M-Pesa → Paybill.</li>
                     <li>Enter paybill and account above; amount as on your statement.</li>
                 </ol>
             </div>
+            <p id="stk-msg" class="form-msg" style="margin-top:0.75rem;"></p>
         </section>
 
         <section class="panel" aria-labelledby="rent-heading">
             <h2 id="rent-heading">Rent schedule</h2>
             <div class="table-wrap">
                 <table class="data" id="rent-table">
-                    <thead><tr><th>Period</th><th>Due</th><th>Rent</th><th>Water</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Period</th><th>Due</th><th>Rent</th><th>Water</th><th>Status</th><th></th></tr></thead>
                     <tbody></tbody>
                 </table>
             </div>
@@ -138,6 +140,58 @@
       late: "badge--late",
     };
     return map[status] || "";
+  }
+
+  function pollPaid(rentId, tries) {
+    if (tries <= 0) return;
+    fetch("/api/tenant/rent/" + rentId + "/pay-status", { credentials: "same-origin" })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (j.paid) {
+          var stkMsg = document.getElementById("stk-msg");
+          if (stkMsg) {
+            stkMsg.className = "form-msg ok";
+            stkMsg.textContent = "Payment received" + (j.receipt ? " (" + j.receipt + ")." : ".");
+          }
+          load();
+          return;
+        }
+        setTimeout(function () { pollPaid(rentId, tries - 1); }, 2000);
+      });
+  }
+
+  function startStkPay(rentId) {
+    var stkMsg = document.getElementById("stk-msg");
+    if (stkMsg) {
+      stkMsg.className = "form-msg";
+      stkMsg.textContent = "Sending M-Pesa prompt…";
+    }
+    fetch("/api/tenant/rent/" + rentId + "/stk-push", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: "{}",
+    })
+      .then(function (r) {
+        return r.json().then(function (j) { return { ok: r.ok, j: j }; });
+      })
+      .then(function (x) {
+        if (!stkMsg) return;
+        if (!x.ok) {
+          stkMsg.className = "form-msg err";
+          stkMsg.textContent = x.j.error || "Could not start payment.";
+          return;
+        }
+        stkMsg.className = "form-msg ok";
+        stkMsg.textContent = x.j.message || "Check your phone.";
+        pollPaid(rentId, 15);
+      })
+      .catch(function () {
+        if (stkMsg) {
+          stkMsg.className = "form-msg err";
+          stkMsg.textContent = "Network error.";
+        }
+      });
   }
 
   function load() {
@@ -223,6 +277,23 @@
           tr.appendChild(td2);
           tr.appendChild(tdW);
           tr.appendChild(tdS);
+          if (row.status === "due" || row.status === "late") {
+            var tdA = document.createElement("td");
+            var btn = document.createElement("button");
+            btn.type = "button";
+            btn.className = "btn btn-secondary";
+            btn.textContent = "Pay now";
+            btn.title = "Account ref R" + row.id;
+            btn.addEventListener("click", function () {
+              startStkPay(row.id);
+            });
+            tdA.appendChild(btn);
+            tr.appendChild(tdA);
+          } else {
+            var tdE = document.createElement("td");
+            tdE.textContent = row.mpesa_receipt ? row.mpesa_receipt : "—";
+            tr.appendChild(tdE);
+          }
           rt.appendChild(tr);
         });
         var mt = document.querySelector("#maint-table tbody");

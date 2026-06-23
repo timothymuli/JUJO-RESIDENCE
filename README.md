@@ -31,7 +31,19 @@ First run creates `data/jujo.db` and seeds demo data. Delete `data/jujo.db` to r
 
 - **Tenant self-registration:** `register.html` → SMS OTP (`/api/auth/register/start` + `/verify`). With `SMS_MOCK=1`, the code is logged and returned as `devOtp` for testing. For live SMS, set [Africa’s Talking](https://africastalking.com/) env vars in `.env` and unset `SMS_MOCK`.
 - **Approval:** New tenants default to **pending** until an admin clicks **Activate** on the admin dashboard (`REGISTRATION_AUTO_APPROVE=1` skips that).
-- **M-Pesa Paybill** numbers are in `.env` (`JUJO_MPESA_*`, `BLESSED_MPESA_*`) and shown on property pages and the tenant portal. This is **manual Paybill** (not STK Push). Daraja STK can be added later.
+- **M-Pesa Paybill** numbers are in `.env` (`JUJO_MPESA_*`, `BLESSED_MPESA_*`) and shown on property pages and the tenant portal.
+- **STK push:** tenants tap **Pay now** in the portal (`MPESA_MOCK=1` for demo without Safaricom keys). Set Daraja env vars and `MPESA_MOCK=0` for live STK.
+- **Auto-detect Paybill:** manual payments with account `R{rent_id}` or matching phone + amount mark rent paid via `/api/mpesa/c2b/confirmation` (register C2B URLs in Safaricom Daraja).
+
+## Staff logins (seeded automatically)
+
+| Role | Email | Password |
+|------|-------|----------|
+| Landlord | `landlord@jujo.local` | `STAFF_PASSWORD` (default `staff123`) |
+| Caretaker Mlolongo | `caretaker.ml1@jujo.local`, `caretaker.ml2@jujo.local` | same |
+| Caretaker Syokimau | `caretaker.sy1@jujo.local`, `caretaker.sy2@jujo.local` | same |
+
+Phones match `CARETAKER_SMS_MLOLONGO` and `CARETAKER_SMS_SYOKIMAU` in `.env`.
 
 ## Deploy on Render (free — works on phone)
 

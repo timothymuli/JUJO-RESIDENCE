@@ -16,6 +16,13 @@ const { normalizeKePhone } = require("./lib/phone");
 const { sendSms } = require("./lib/sms");
 const { startReminders } = require("./lib/reminders");
 const { tenantDocUpload, uploadDirRoot, ensureUploadDir } = require("./lib/tenantUploads");
+const { isMock, stkPush, parseStkCallback } = require("./lib/mpesa");
+const {
+  totalDueCents,
+  markRentPaid,
+  matchC2bPayment,
+  recordPayment,
+} = require("./lib/payments");
 
 initDb();
 const db = getDb();
@@ -265,6 +272,8 @@ app.get("/api/config", function (req, res) {
         ? "Accounts activate immediately after SMS verification."
         : "After SMS verification, the office activates your login (usually within one working day).",
     smsMock: process.env.SMS_MOCK === "1" || !process.env.AFRICASTALKING_API_KEY,
+    mpesaStkEnabled: true,
+    mpesaMock: isMock(),
   });
 });
 
@@ -657,7 +666,7 @@ app.get("/api/rent", requireLogin, function (req, res) {
 
   const rows = db
     .prepare(
-      `SELECT id, label, amount_cents, water_amount_cents, due_date, paid_at, status
+      `SELECT id, label, amount_cents, water_amount_cents, due_date, paid_at, status, mpesa_receipt
        FROM rent_records
        WHERE user_id = ?
        ORDER BY datetime(due_date) DESC`
@@ -697,6 +706,191 @@ app.post("/api/rent/record", requireOperations, function (req, res) {
   ).run(userId, propertyId, label, amountCents, waterCents, dueDate, paidAt, status);
 
   res.json({ ok: true });
+});
+
+function applyStkSuccess(opts) {
+  const rentId = opts.rentId;
+  const receipt = opts.mpesaReceipt || "STK-" + Date.now();
+  const paid = markRentPaid(db, rentId, receipt, "stk");
+  if (!paid.ok) return paid;
+
+  db.prepare(
+    `UPDATE mpesa_payments
+     SET status = 'completed', mpesa_receipt = ?, raw_json = COALESCE(?, raw_json)
+     WHERE checkout_request_id = ?`
+  ).run(receipt, opts.rawJson || null, opts.checkoutRequestId);
+
+  return { ok: true, rentId: rentId };
+}
+
+app.post("/api/tenant/rent/:id/stk-push", requireTenant, function (req, res) {
+  const rentId = Number(req.params.id);
+  const row = db
+    .prepare(
+      `SELECT r.id, r.user_id, r.label, r.amount_cents, r.water_amount_cents, r.status
+       FROM rent_records r WHERE r.id = ? AND r.user_id = ?`
+    )
+    .get(rentId, req.session.uid);
+
+  if (!row) {
+    return jsonErr(res, 404, "Rent line not found.");
+  }
+  if (row.status === "paid") {
+    return jsonErr(res, 400, "Already paid.");
+  }
+
+  const user = loadUser(req.session.uid);
+  const phone = normalizeKePhone(user.phone || req.body.phone || "");
+  if (!phone) {
+    return jsonErr(res, 400, "Add your Safaricom number on your profile or enter it below.");
+  }
+
+  const amountCents = totalDueCents(row);
+  const amountKes = Math.round(amountCents / 100);
+
+  stkPush({
+    phone: phone,
+    amountKes: amountKes,
+    rentId: rentId,
+    description: "Rent " + row.label,
+  })
+    .then(function (stk) {
+      if (!stk.ok) {
+        return jsonErr(res, 502, stk.error || "Could not start M-Pesa prompt.");
+      }
+
+      db.prepare(
+        `INSERT INTO mpesa_payments (
+           rent_record_id, user_id, phone, amount_cents,
+           checkout_request_id, merchant_request_id, status, source
+         ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`
+      ).run(
+        rentId,
+        req.session.uid,
+        phone,
+        amountCents,
+        stk.CheckoutRequestID,
+        stk.MerchantRequestID,
+        stk.mock ? "stk_mock" : "stk"
+      );
+
+      if (stk.mock) {
+        setTimeout(function () {
+          applyStkSuccess({
+            rentId: rentId,
+            checkoutRequestId: stk.CheckoutRequestID,
+            merchantRequestId: stk.MerchantRequestID,
+            phone: phone,
+            amountCents: amountCents,
+            mpesaReceipt: "MOCK" + rentId,
+            mock: true,
+          });
+        }, 2500);
+      }
+
+      res.json({
+        ok: true,
+        checkoutRequestId: stk.CheckoutRequestID,
+        amountKes: amountKes,
+        mock: Boolean(stk.mock),
+        message: stk.mock
+          ? "Demo mode: payment will auto-complete in a few seconds."
+          : "Check your phone for the M-Pesa PIN prompt.",
+      });
+    })
+    .catch(function (err) {
+      console.error("[STK]", err);
+      jsonErr(res, 502, "M-Pesa service error.");
+    });
+});
+
+app.get("/api/tenant/rent/:id/pay-status", requireTenant, function (req, res) {
+  const rentId = Number(req.params.id);
+  const row = db
+    .prepare(
+      `SELECT id, status, mpesa_receipt FROM rent_records WHERE id = ? AND user_id = ?`
+    )
+    .get(rentId, req.session.uid);
+  if (!row) {
+    return jsonErr(res, 404, "Not found.");
+  }
+  res.json({
+    ok: true,
+    status: row.status,
+    paid: row.status === "paid",
+    receipt: row.mpesa_receipt || null,
+  });
+});
+
+app.post("/api/mpesa/stk-callback", function (req, res) {
+  const parsed = parseStkCallback(req.body);
+  res.json({ ResultCode: 0, ResultDesc: "Accepted" });
+
+  if (!parsed || parsed.resultCode !== 0) {
+    if (parsed && parsed.checkoutRequestId) {
+      db.prepare(
+        `UPDATE mpesa_payments SET status = 'failed', raw_json = ? WHERE checkout_request_id = ?`
+      ).run(JSON.stringify(req.body), parsed.checkoutRequestId);
+    }
+    return;
+  }
+
+  const pending = db
+    .prepare(
+      `SELECT rent_record_id, user_id, phone, amount_cents
+       FROM mpesa_payments WHERE checkout_request_id = ? AND status = 'pending'`
+    )
+    .get(parsed.checkoutRequestId);
+
+  if (!pending || !pending.rent_record_id) return;
+
+  applyStkSuccess({
+    rentId: pending.rent_record_id,
+    checkoutRequestId: parsed.checkoutRequestId,
+    merchantRequestId: parsed.merchantRequestId,
+    phone: parsed.phone || pending.phone,
+    amountCents: pending.amount_cents,
+    mpesaReceipt: parsed.mpesaReceipt,
+    rawJson: JSON.stringify(req.body),
+  });
+});
+
+app.post("/api/mpesa/c2b/validation", function (req, res) {
+  res.json({
+    ResultCode: 0,
+    ResultDesc: "Accepted",
+  });
+});
+
+app.post("/api/mpesa/c2b/confirmation", function (req, res) {
+  const b = req.body || {};
+  res.json({ ResultCode: 0, ResultDesc: "Accepted" });
+
+  const amount = b.TransAmount || b.trans_amount;
+  const billRef = b.BillRefNumber || b.bill_ref_number;
+  const phone = b.MSISDN || b.msisdn || b.PhoneNumber;
+  const receipt = b.TransID || b.trans_id || "C2B-" + Date.now();
+
+  const match = matchC2bPayment(db, {
+    amount: amount,
+    billRef: billRef,
+    phone: phone,
+  });
+
+  recordPayment(db, {
+    rentRecordId: match ? match.id : null,
+    userId: match ? match.user_id : null,
+    phone: phone || null,
+    amountCents: Math.round(Number(amount) * 100),
+    mpesaReceipt: receipt,
+    status: match ? "completed" : "unmatched",
+    source: "c2b",
+    rawJson: JSON.stringify(b),
+  });
+
+  if (match) {
+    markRentPaid(db, match.id, receipt, "c2b");
+  }
 });
 
 app.post("/api/admin/users", requireAdmin, function (req, res) {
@@ -1142,10 +1336,6 @@ app.get("/api/documents/:id/file", requireLogin, function (req, res) {
     "attachment; filename=" + JSON.stringify(disp)
   );
   fs.createReadStream(full).pipe(res);
-});
-
-app.get("/api/health", function (req, res) {
-  res.json({ ok: true });
 });
 
 app.use(express.static(path.join(__dirname, "public")));
