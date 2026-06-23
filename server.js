@@ -552,6 +552,7 @@ app.get("/api/me", function (req, res) {
     user: {
       id: user.id,
       email: user.email,
+      phone: user.phone || null,
       role: user.role,
       fullName: user.full_name,
       propertyId: user.property_id,
