@@ -282,8 +282,8 @@ app.get("/api/config", function (req, res) {
     smsMock: process.env.SMS_MOCK === "1" || !process.env.AFRICASTALKING_API_KEY,
     mpesaStkEnabled: true,
     mpesaMock: isMock(),
-    ussdChannel: process.env.USSD_CHANNEL || "123",
-    ussdDial: process.env.USSD_DIAL || "*384*123#",
+    ussdChannel: process.env.USSD_CHANNEL || "24145",
+    ussdDial: process.env.USSD_DIAL || "*384*24145#",
   });
 });
 
@@ -940,7 +940,7 @@ app.post("/api/ussd", function (req, res) {
   var response;
   if (!text || text === "") {
     response =
-      "CON JUJO Residence (*384*123#)\n1. Pay rent help\n2. Contact office\n3. Exit";
+      "CON JUJO Residence (*384*24145#)\n1. Pay rent help\n2. Contact office\n3. Exit";
   } else if (text === "1") {
     response =
       "END Open https://jujo-residence.onrender.com/login.html to pay rent or view bills.";

@@ -65,8 +65,8 @@ AFRICASTALKING_SENDER=
 |----------|------------|
 | **USSD callback / channel** | `https://jujo-residence.onrender.com/api/ussd` |
 | **Shared service code** | `*384#` |
-| **Your channel** | `123` |
-| **Dial** | `*384*123#` |
+| **Your channel** | `24145` |
+| **Dial** | `*384*24145#` |
 
 Create a USSD channel in AT and point it at that URL.  
 Basic menu: rent help / contact / exit (you can grow this later).
