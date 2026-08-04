@@ -56,6 +56,10 @@ services:
         value: ""
       - key: AFRICASTALKING_SHORTCODE
         value: "53154"
+      - key: USSD_CHANNEL
+        value: "123"
+      - key: USSD_DIAL
+        value: "*384*123#"
 
       # --- Reminders ---
       - key: DISABLE_REMINDERS

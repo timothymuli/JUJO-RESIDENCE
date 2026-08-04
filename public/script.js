@@ -93,7 +93,8 @@
 
     var phoneEl = document.getElementById("contact-phone");
     var emailEl = document.getElementById("contact-email");
-    if (phoneEl || emailEl) {
+    var ussdEl = document.getElementById("ussd-dial");
+    if (phoneEl || emailEl || ussdEl) {
       fetch("/api/config")
         .then(function (r) {
           return r.json();
@@ -101,6 +102,7 @@
         .then(function (data) {
           if (data.contactPhone && phoneEl) phoneEl.textContent = data.contactPhone;
           if (data.contactEmail && emailEl) emailEl.textContent = data.contactEmail;
+          if (data.ussdDial && ussdEl) ussdEl.textContent = data.ussdDial;
         })
         .catch(function () {});
     }
