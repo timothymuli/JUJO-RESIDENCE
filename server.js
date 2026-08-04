@@ -888,9 +888,23 @@ function logAt(label, req) {
   );
 }
 
-// Incoming SMS (inbox)
+// Incoming SMS (inbox) — Africa's Talking "notifications" webhook
 app.post("/api/sms/inbox", function (req, res) {
   logAt("inbox", req);
+  var b = req.body || {};
+  var from = b.from || b.phoneNumber || b.sender;
+  var text = b.text || b.message;
+  var to = b.to || b.shortCode;
+  if (from || text) {
+    console.log(
+      "[AT incoming SMS] from=" +
+        from +
+        " to=" +
+        to +
+        " text=" +
+        JSON.stringify(text || "")
+    );
+  }
   atOk(res);
 });
 app.get("/api/sms/inbox", function (req, res) {
@@ -898,9 +912,13 @@ app.get("/api/sms/inbox", function (req, res) {
   atOk(res);
 });
 
-// Delivery reports
+// Delivery reports (also via notifications)
 app.post("/api/sms/delivery", function (req, res) {
   logAt("delivery", req);
+  atOk(res);
+});
+app.get("/api/sms/delivery", function (req, res) {
+  logAt("delivery-get", req);
   atOk(res);
 });
 

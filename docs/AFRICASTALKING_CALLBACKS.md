@@ -1,4 +1,73 @@
-# Africa's Talking dashboard — what to fill
+# Africa's Talking — Notifications (preferred way to receive SMS)
+
+AT says: use **notifications** (webhooks) instead of the **Fetch Messages API**.
+
+That means: when someone texts your shortcode, **AT POSTs to your URL**.  
+You do **not** keep calling “fetch inbox” from your server.
+
+Our app already does this.
+
+---
+
+## Where to fill the notification URLs (Africa's Talking)
+
+1. Log in → your app (**Sandbox**)
+2. Open **SMS** → **Callback URLs** / **Notifications** / **Inbox**
+3. Paste:
+
+| Notification type | URL |
+|-------------------|-----|
+| **Incoming messages** (inbox) | `https://jujo-residence.onrender.com/api/sms/inbox` |
+| **Delivery reports** | `https://jujo-residence.onrender.com/api/sms/delivery` |
+| **Bulk opt-out** | `https://jujo-residence.onrender.com/api/sms/optout` |
+
+Save.
+
+When a message arrives, Render **Logs** will show `[AT incoming SMS] from=... text=...`
+
+---
+
+## Where to fill YOUR phone number
+
+**Not** in the notification URL.
+
+### Sandbox (testing)
+
+1. Africa's Talking → **SMS** → **Sandbox** → **Phone numbers** / **Test numbers**
+2. Add your number: **`+254758981679`** (or `0758981679` if the form wants local format — prefer `+254…`)
+3. Save
+
+Without this, sandbox **will not** send OTP/reminders to your phone, and you may not receive test traffic correctly.
+
+### Live
+
+Your phone is whatever tenants register with. Staff phones for reminders are already in Render env:
+
+- `CARETAKER_SMS_MLOLONGO`
+- `CARETAKER_SMS_SYOKIMAU`
+
+Admin test SMS uses the number you type in the admin form (e.g. `254758981679`).
+
+---
+
+## OTP / rent SMS (sending) vs notifications (receiving)
+
+| Goal | What you need |
+|------|----------------|
+| **Send** OTP / reminders | `SMS_MOCK=0` + username + API key on Render |
+| **Receive** replies to shortcode | Inbox notification URL above |
+| **Test on your phone** | Add `+254758981679` under Sandbox test numbers |
+
+Notifications do **not** replace the API key. You still need both.
+
+---
+
+## Docs link AT mentions
+
+https://developers.africastalking.com/docs/sms/notifications  
+
+Same idea: AT pushes events to your webhook.
+
 
 Base URL (your live app):
 
