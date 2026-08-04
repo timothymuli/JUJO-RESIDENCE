@@ -16,10 +16,30 @@ services:
         generateValue: true
       - key: OTP_SALT
         generateValue: true
+      # Change to "0" after adding Africa's Talking keys (real OTP / reminders)
       - key: SMS_MOCK
         value: "1"
+      - key: AFRICASTALKING_USERNAME
+        sync: false
+      - key: AFRICASTALKING_API_KEY
+        sync: false
+      - key: AFRICASTALKING_SENDER
+        sync: false
+      # Change to "0" after adding Daraja keys (real STK)
       - key: MPESA_MOCK
         value: "1"
+      - key: MPESA_ENV
+        value: sandbox
+      - key: PUBLIC_BASE_URL
+        value: https://jujo-residence.onrender.com
+      - key: MPESA_CONSUMER_KEY
+        sync: false
+      - key: MPESA_CONSUMER_SECRET
+        sync: false
+      - key: MPESA_PASSKEY
+        sync: false
+      - key: MPESA_SHORTCODE
+        sync: false
       - key: DISABLE_REMINDERS
         value: "0"
       - key: REMINDER_TZ

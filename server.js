@@ -375,17 +375,25 @@ app.post(
       "Your JUJO Residence verification code is " +
       otp +
       ". It expires in 12 minutes. Do not share this code.";
-    sendSms(phone, msg).then(function () {
-      /* ignore */
-    });
 
-    const payload = { ok: true };
-    if (process.env.SMS_MOCK === "1" || !process.env.AFRICASTALKING_API_KEY) {
-      payload.devOtp = otp;
-      payload._note =
-        "SMS not configured — code shown for testing only. Set Africa's Talking keys and unset SMS_MOCK for live SMS.";
-    }
-    res.json(payload);
+    sendSms(phone, msg).then(function (result) {
+      if (!result.ok) {
+        return jsonErr(
+          res,
+          502,
+          result.error ||
+            "Could not send SMS. On Render set SMS_MOCK=0 and Africa's Talking keys."
+        );
+      }
+
+      const payload = { ok: true };
+      if (result.mock) {
+        payload.devOtp = otp;
+        payload._note =
+          "SMS_MOCK is on — code shown for testing. Set SMS_MOCK=0 + Africa's Talking for real SMS.";
+      }
+      res.json(payload);
+    });
   }
 );
 
@@ -848,11 +856,17 @@ app.post("/api/admin/test-sms", requireAdmin, function (req, res) {
   }
   const text = rentReminderText();
   sendSms(phone, text).then(function (r) {
+    if (!r.ok) {
+      return jsonErr(res, 502, r.error || "SMS failed.");
+    }
     res.json({
       ok: true,
       mock: Boolean(r.mock),
       text: text,
       to: phone,
+      message: r.mock
+        ? "Mock only — SMS_MOCK is still 1 or keys missing."
+        : "SMS accepted by Africa's Talking.",
     });
   });
 });
