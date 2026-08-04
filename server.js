@@ -871,6 +871,17 @@ app.post("/api/admin/test-sms", requireAdmin, function (req, res) {
   });
 });
 
+/** Africa's Talking callbacks (optional — outbound OTP works without these). */
+app.post("/api/sms/inbox", function (req, res) {
+  console.log("[AT inbox]", JSON.stringify(req.body || {}));
+  res.status(200).send("OK");
+});
+
+app.post("/api/sms/delivery", function (req, res) {
+  console.log("[AT delivery]", JSON.stringify(req.body || {}));
+  res.status(200).send("OK");
+});
+
 function applyStkSuccess(opts) {
   const rentId = opts.rentId;
   const receipt = opts.mpesaReceipt || "STK-" + Date.now();
