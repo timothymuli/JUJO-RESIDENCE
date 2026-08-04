@@ -993,6 +993,16 @@ app.post("/api/airtime/validation", function (req, res) {
   res.status(200).json({ status: "Validated", description: "Accepted" });
 });
 
+// Insights (SIM swap / number insight callbacks)
+app.post("/api/insights", function (req, res) {
+  logAt("insights", req);
+  atOk(res);
+});
+app.get("/api/insights", function (req, res) {
+  logAt("insights-get", req);
+  atOk(res);
+});
+
 function applyStkSuccess(opts) {
   const rentId = opts.rentId;
   const receipt = opts.mpesaReceipt || "STK-" + Date.now();
