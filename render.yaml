@@ -1,5 +1,5 @@
 # Deploy on Render: Dashboard → New → Blueprint → connect this repo.
-# Or: New Web Service → connect GitHub → Render reads this file automatically.
+# Or: New Web Service → connect GitHub → Render auto-deploys on push to main.
 services:
   - type: web
     name: jujo-residence
@@ -16,22 +16,64 @@ services:
         generateValue: true
       - key: OTP_SALT
         generateValue: true
-      # Change to "0" after adding Africa's Talking keys (real OTP / reminders)
-      - key: SMS_MOCK
-        value: "1"
-      - key: AFRICASTALKING_USERNAME
+      - key: PUBLIC_BASE_URL
+        value: https://jujo-residence.onrender.com
+
+      # --- Team passwords (set in Render dashboard; do not put secrets in Git) ---
+      - key: ADMIN_PASSWORD
         sync: false
+      - key: LANDLORD_PASSWORD
+        sync: false
+      - key: STAFF_PASSWORD
+        sync: false
+      - key: SUPERADMIN_EMAILS
+        value: timothymuli76@gmail.com
+
+      # --- Contact ---
+      - key: CONTACT_PHONE
+        sync: false
+      - key: CONTACT_EMAIL
+        sync: false
+
+      # --- Paybill display (manual Lipa na M-Pesa) ---
+      - key: JUJO_MPESA_PAYBILL
+        value: "222111"
+      - key: JUJO_MPESA_ACCOUNT
+        value: "2319887"
+      - key: BLESSED_MPESA_PAYBILL
+        value: "247247"
+      - key: BLESSED_MPESA_ACCOUNT
+        value: "749748"
+
+      # --- Africa's Talking (set API key in dashboard; SMS_MOCK=0 for real SMS) ---
+      - key: SMS_MOCK
+        value: "0"
+      - key: AFRICASTALKING_USERNAME
+        value: sandbox
       - key: AFRICASTALKING_API_KEY
         sync: false
       - key: AFRICASTALKING_SENDER
-        sync: false
-      # Change to "0" after adding Daraja keys (real STK)
+        value: ""
+      - key: AFRICASTALKING_SHORTCODE
+        value: "53154"
+
+      # --- Reminders ---
+      - key: DISABLE_REMINDERS
+        value: "0"
+      - key: REMINDER_TZ
+        value: Africa/Nairobi
+      - key: REMINDER_TENANT_TEXT
+        value: "JUJO Residence: Rent and water for this month are due. Please pay by the 10th. Open your tenant portal and tap Pay now, or use M-Pesa Paybill."
+      - key: CARETAKER_SMS_MLOLONGO
+        value: "+254745909444,+254727731996"
+      - key: CARETAKER_SMS_SYOKIMAU
+        value: "+254711475919,+254723161584"
+
+      # --- Daraja STK (set keys in dashboard; MPESA_MOCK=0 for real STK) ---
       - key: MPESA_MOCK
         value: "1"
       - key: MPESA_ENV
         value: sandbox
-      - key: PUBLIC_BASE_URL
-        value: https://jujo-residence.onrender.com
       - key: MPESA_CONSUMER_KEY
         sync: false
       - key: MPESA_CONSUMER_SECRET
@@ -40,15 +82,8 @@ services:
         sync: false
       - key: MPESA_SHORTCODE
         sync: false
-      - key: DISABLE_REMINDERS
+      - key: MPESA_STK_CALLBACK_URL
+        value: https://jujo-residence.onrender.com/api/mpesa/stk-callback
+
+      - key: REGISTRATION_AUTO_APPROVE
         value: "0"
-      - key: REMINDER_TZ
-        value: Africa/Nairobi
-      - key: ADMIN_PASSWORD
-        sync: false
-      - key: SUPERADMIN_EMAILS
-        value: timothymuli76@gmail.com
-      - key: STAFF_PASSWORD
-        sync: false
-      - key: LANDLORD_PASSWORD
-        sync: false
