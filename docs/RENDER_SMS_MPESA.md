@@ -96,3 +96,20 @@ On Render → **Environment**, you want:
 - [ ] Service redeployed after changes
 
 Until those are set, OTP stays on-screen / in logs, and STK stays simulated.
+
+---
+
+## Africa's Talking dashboard URLs
+
+Copy-paste table: see **`docs/AFRICASTALKING_CALLBACKS.md`**.
+
+Quick list (base `https://jujo-residence.onrender.com`):
+
+- Incoming / inbox → `/api/sms/inbox`
+- Opt-out → `/api/sms/optout`
+- Subscription → `/api/sms/subscription`
+- USSD → `/api/ussd`
+- Airtime status → `/api/airtime/status`
+- Airtime validation → `/api/airtime/validation`
+- Shortcode → `53154`
+- Alphanumeric → leave empty until AT approves a brand name

@@ -871,15 +871,96 @@ app.post("/api/admin/test-sms", requireAdmin, function (req, res) {
   });
 });
 
-/** Africa's Talking callbacks (optional — outbound OTP works without these). */
+/** Africa's Talking webhooks — paste these URLs in the AT dashboard. */
+function atOk(res, body) {
+  if (body) {
+    return res.status(200).type("text/plain").send(body);
+  }
+  return res.status(200).send("OK");
+}
+
+function logAt(label, req) {
+  console.log(
+    "[AT " + label + "]",
+    JSON.stringify({ query: req.query || {}, body: req.body || {} })
+  );
+}
+
+// Incoming SMS (inbox)
 app.post("/api/sms/inbox", function (req, res) {
-  console.log("[AT inbox]", JSON.stringify(req.body || {}));
-  res.status(200).send("OK");
+  logAt("inbox", req);
+  atOk(res);
+});
+app.get("/api/sms/inbox", function (req, res) {
+  logAt("inbox-get", req);
+  atOk(res);
 });
 
+// Delivery reports
 app.post("/api/sms/delivery", function (req, res) {
-  console.log("[AT delivery]", JSON.stringify(req.body || {}));
-  res.status(200).send("OK");
+  logAt("delivery", req);
+  atOk(res);
+});
+
+// Bulk SMS opt-out
+app.post("/api/sms/optout", function (req, res) {
+  logAt("optout", req);
+  atOk(res);
+});
+
+// Subscription / unsubscription (phoneNumber, shortCode, keyword, updateType)
+app.post("/api/sms/subscription", function (req, res) {
+  logAt("subscription", req);
+  var b = req.body || {};
+  var updateType = String(b.updateType || b.UpdateType || "").toLowerCase();
+  if (updateType === "deletion" || updateType === "unsubscribe") {
+    console.log(
+      "[AT] Unsubscribed:",
+      b.phoneNumber || b.phone,
+      "keyword:",
+      b.keyword
+    );
+  } else {
+    console.log(
+      "[AT] Subscribed:",
+      b.phoneNumber || b.phone,
+      "keyword:",
+      b.keyword
+    );
+  }
+  atOk(res);
+});
+
+// USSD session callback
+app.post("/api/ussd", function (req, res) {
+  logAt("ussd", req);
+  var text = (req.body && req.body.text) || "";
+  var response;
+  if (!text || text === "") {
+    response =
+      "CON JUJO Residence\n1. Pay rent help\n2. Contact office\n3. Exit";
+  } else if (text === "1") {
+    response =
+      "END Open https://jujo-residence.onrender.com/login.html to pay rent or view bills.";
+  } else if (text === "2") {
+    response =
+      "END Call or message the office via the website contact form.";
+  } else {
+    response = "END Thank you.";
+  }
+  res.status(200).type("text/plain").send(response);
+});
+
+// Airtime
+app.post("/api/airtime/status", function (req, res) {
+  logAt("airtime-status", req);
+  atOk(res);
+});
+
+app.post("/api/airtime/validation", function (req, res) {
+  logAt("airtime-validation", req);
+  // Accept the request unless you add business rules later
+  res.status(200).json({ status: "Validated", description: "Accepted" });
 });
 
 function applyStkSuccess(opts) {
