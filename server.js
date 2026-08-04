@@ -933,7 +933,7 @@ app.post("/api/sms/subscription", function (req, res) {
   atOk(res);
 });
 
-// USSD session callback
+// USSD session callback (menus)
 app.post("/api/ussd", function (req, res) {
   logAt("ussd", req);
   var text = (req.body && req.body.text) || "";
@@ -951,6 +951,16 @@ app.post("/api/ussd", function (req, res) {
     response = "END Thank you.";
   }
   res.status(200).type("text/plain").send(response);
+});
+
+// USSD events (session end: duration, cost, etc.)
+app.post("/api/ussd/events", function (req, res) {
+  logAt("ussd-events", req);
+  atOk(res);
+});
+app.get("/api/ussd/events", function (req, res) {
+  logAt("ussd-events-get", req);
+  atOk(res);
 });
 
 // Airtime

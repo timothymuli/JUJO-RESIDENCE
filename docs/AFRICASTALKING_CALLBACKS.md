@@ -63,7 +63,8 @@ AFRICASTALKING_SENDER=
 
 | AT field | Paste this |
 |----------|------------|
-| **USSD callback / channel** | `https://jujo-residence.onrender.com/api/ussd` |
+| **USSD callback URL** | `https://jujo-residence.onrender.com/api/ussd` |
+| **USSD events URL** | `https://jujo-residence.onrender.com/api/ussd/events` |
 | **Shared service code** | `*384#` |
 | **Your channel** | `24145` |
 | **Dial** | `*384*24145#` |
