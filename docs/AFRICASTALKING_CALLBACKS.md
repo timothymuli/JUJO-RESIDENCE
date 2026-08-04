@@ -44,19 +44,41 @@ Our server logs these; it does not change rent yet.
 
 | Field | What to do |
 |-------|------------|
-| **Alphanumeric** | Apply for a brand name (e.g. `JUJO`) if AT offers it. Until approved, leave blank on Render. |
+| **Alphanumeric** | Create/request **`JUJO`** in AT (SMS → Sender IDs / Alphanumeric). Wait for approval. |
 | **Shortcode** | `53154` — for receiving / subscriptions. |
 
-On **Render** env (optional later):
+### Create alphanumeric (Africa's Talking)
+
+1. Log in → your app (Sandbox or Live).
+2. Open **SMS** → **Sender IDs** / **Alphanumeric** / **Create**.
+3. Fill:
+
+| Field | Value |
+|--------|--------|
+| Sender ID / Name | `JUJO` |
+| Purpose | Property management OTP, rent reminders, tenant notices |
+| Company / Brand | JUJO Residence |
+
+4. Submit and wait for AT approval (sandbox may allow faster; live can take days).
+5. On **Render** → Environment set:
 
 ```
-AFRICASTALKING_SENDER=
+AFRICASTALKING_SENDER=JUJO
 ```
 
-- Sandbox: leave **empty**  
-- Live with approved alpha: set `AFRICASTALKING_SENDER=JUJO` (or whatever AT approved)  
-- Do **not** put the shortcode as `from` unless AT told you to  
+6. Redeploy / save.
 
+**Sandbox tip:** if SMS fails with an unapproved sender, clear `AFRICASTALKING_SENDER` (leave empty) so AT uses the default sandbox sender.
+
+On **Render** env:
+
+```
+AFRICASTALKING_SENDER=JUJO
+```
+
+- Sandbox: if send fails, leave empty temporarily  
+- Live: use only after AT approves `JUJO`  
+- Do **not** put shortcode `53154` as `from` unless AT told you to
 ---
 
 ## USSD

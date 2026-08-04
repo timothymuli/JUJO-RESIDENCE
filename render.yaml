@@ -53,7 +53,7 @@ services:
       - key: AFRICASTALKING_API_KEY
         sync: false
       - key: AFRICASTALKING_SENDER
-        value: ""
+        value: "JUJO"
       - key: AFRICASTALKING_SHORTCODE
         value: "53154"
       - key: USSD_CHANNEL
