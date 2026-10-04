@@ -23,10 +23,46 @@ const {
   matchC2bPayment,
   recordPayment,
 } = require("./lib/payments");
+const {
+  parseNotices,
+  socialLinks,
+  buildSetupChecklist,
+} = require("./lib/setup");
 
 initDb();
 const db = getDb();
 ensureUploadDir();
+
+const DEFAULT_CONTACT_PHONE = "+254758981679";
+const DEFAULT_CONTACT_EMAIL = "timothymuli76@gmail.com";
+
+function officePhone() {
+  return (process.env.CONTACT_PHONE || DEFAULT_CONTACT_PHONE).trim();
+}
+
+function officeEmail() {
+  return (process.env.CONTACT_EMAIL || DEFAULT_CONTACT_EMAIL).trim();
+}
+
+function alertPhones() {
+  var raw =
+    process.env.ALERT_SMS_PHONES ||
+    process.env.CONTACT_PHONE ||
+    DEFAULT_CONTACT_PHONE;
+  return String(raw)
+    .split(/[,;\s]+/)
+    .map(function (s) {
+      return normalizeKePhone(s);
+    })
+    .filter(Boolean);
+}
+
+function notifyOffice(text) {
+  var msg = String(text || "").slice(0, 320);
+  alertPhones().forEach(function (p) {
+    sendSms(p, msg).catch(function () {});
+  });
+}
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -272,9 +308,11 @@ app.get("/api/config", function (req, res) {
   const pay = mpesaConfig();
   res.json({
     ok: true,
-    contactPhone: process.env.CONTACT_PHONE || "",
-    contactEmail: process.env.CONTACT_EMAIL || "",
+    contactPhone: officePhone(),
+    contactEmail: officeEmail(),
     mpesa: pay,
+    notices: parseNotices(),
+    social: socialLinks(),
     registrationNote:
       process.env.REGISTRATION_AUTO_APPROVE === "1"
         ? "Accounts activate immediately after SMS verification."
@@ -284,6 +322,19 @@ app.get("/api/config", function (req, res) {
     mpesaMock: isMock(),
     ussdChannel: process.env.USSD_CHANNEL || "24145",
     ussdDial: process.env.USSD_DIAL || "*384*24145#",
+  });
+});
+
+app.get("/api/admin/setup-checklist", requireAdmin, function (req, res) {
+  const items = buildSetupChecklist();
+  const done = items.filter(function (i) {
+    return i.done;
+  }).length;
+  res.json({
+    ok: true,
+    items: items,
+    done: done,
+    total: items.length,
   });
 });
 
@@ -311,6 +362,15 @@ app.post("/api/contact", function (req, res) {
     `INSERT INTO contact_messages (property_slug, name, email, message)
      VALUES (?, ?, ?, ?)`
   ).run(propertySlug, name || null, email, message);
+
+  notifyOffice(
+    "JUJO enquiry (" +
+      (propertySlug || "general") +
+      ") from " +
+      (name || email) +
+      ": " +
+      message.slice(0, 140)
+  );
 
   res.json({ ok: true });
 });
@@ -447,6 +507,16 @@ app.post("/api/auth/register/verify", registerLimiter, function (req, res) {
     );
 
   db.prepare("DELETE FROM registration_otps WHERE id = ?").run(row.id);
+
+  notifyOffice(
+    "JUJO new tenant: " +
+      (row.full_name || row.email) +
+      " " +
+      phone +
+      " (" +
+      auto +
+      "). Open the operations desk."
+  );
 
   res.json({
     ok: true,

@@ -29,11 +29,13 @@ services:
       - key: SUPERADMIN_EMAILS
         value: timothymuli76@gmail.com
 
-      # --- Contact ---
+      # --- Contact (shown on the public site) ---
       - key: CONTACT_PHONE
-        sync: false
+        value: "+254758981679"
       - key: CONTACT_EMAIL
-        sync: false
+        value: timothymuli76@gmail.com
+      - key: ALERT_SMS_PHONES
+        value: "+254758981679"
 
       # --- Paybill display (manual Lipa na M-Pesa) ---
       - key: JUJO_MPESA_PAYBILL
@@ -90,4 +92,4 @@ services:
         value: https://jujo-residence.onrender.com/api/mpesa/stk-callback
 
       - key: REGISTRATION_AUTO_APPROVE
-        value: "0"
+        value: "1"

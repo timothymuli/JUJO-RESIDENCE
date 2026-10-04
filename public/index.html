@@ -140,10 +140,10 @@
 
         <section class="section page-section container" id="contact">
             <h2>Contact the office</h2>
-            <p class="prose-block">Set <code class="muted" style="font-size:0.9rem;">CONTACT_PHONE</code> and <code class="muted" style="font-size:0.9rem;">CONTACT_EMAIL</code> in your server <code class="muted">.env</code> file so the lines below auto-fill. Until then, placeholders show here.</p>
+            <p class="prose-block" id="contact-hint">Call, email, or send a message — the office sees every enquiry in the inbox.</p>
             <ul class="contact-list">
-                <li><strong>Phone</strong> — <span id="contact-phone" class="muted">Configure CONTACT_PHONE</span></li>
-                <li><strong>Email</strong> — <span id="contact-email" class="muted">Configure CONTACT_EMAIL</span></li>
+                <li><strong>Phone</strong> — <span id="contact-phone"><a href="tel:+254758981679">+254758981679</a></span></li>
+                <li><strong>Email</strong> — <span id="contact-email"><a href="mailto:timothymuli76@gmail.com">timothymuli76@gmail.com</a></span></li>
                 <li><strong>USSD</strong> — dial <strong id="ussd-dial">*384*24145#</strong> (channel 24145)</li>
             </ul>
             <div class="surface" style="margin-top:1.75rem;">
@@ -204,7 +204,8 @@
 
         <section id="updates" class="page-section container">
             <h2>Updates</h2>
-            <p class="legal-block">No live notices yet — add water shutdowns, gate hours, or community news here when you have them.</p>
+            <ul id="site-notices" class="contact-list" hidden></ul>
+            <p id="site-notices-empty" class="legal-block">No live notices at the moment — check back for water shutdowns, gate hours, or community news.</p>
         </section>
 
         <section id="privacy-policy" class="page-section container">
@@ -255,11 +256,7 @@
             </div>
         </div>
         <div class="container footer-meta">
-            <p class="social-inline">
-                <a href="#">Facebook</a>
-                <a href="#">Instagram</a>
-                <a href="#">LinkedIn</a>
-            </p>
+            <p class="social-inline" id="social-links" hidden></p>
             <p>&copy; 2026 JUJO Residence. All rights reserved.</p>
         </div>
     </footer>
