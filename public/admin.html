@@ -33,6 +33,13 @@
             <p class="dash-sub">Inbox, maintenance queue, rent ledger, and tenant onboarding for both properties.</p>
         </header>
 
+        <section class="panel" aria-labelledby="setup-h">
+            <h2 id="setup-h">Launch checklist</h2>
+            <p class="muted" style="font-size:0.9rem;margin:-0.25rem 0 0.75rem;">What’s left before go-live — also see <code>CONTENT_NEEDED.md</code> in the repo.</p>
+            <p id="setup-summary" class="muted" style="font-size:0.95rem;margin-bottom:0.75rem;">Loading…</p>
+            <ul id="setup-list" class="contact-list" style="font-size:0.92rem;line-height:1.7;"></ul>
+        </section>
+
         <section class="panel" aria-labelledby="summary-h">
             <h2 id="summary-h">Numbers at a glance</h2>
             <div id="summary-body" class="muted" style="font-size:0.95rem;line-height:1.65;">Loading…</div>
@@ -290,6 +297,40 @@
       );
     }
     el.textContent = parts.join(" · ");
+  }
+
+  function loadSetupChecklist() {
+    fetch("/api/admin/setup-checklist", { credentials: "same-origin" })
+      .then(function (r) {
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data.ok) return;
+        var summary = document.getElementById("setup-summary");
+        var list = document.getElementById("setup-list");
+        if (summary) {
+          summary.textContent =
+            data.done + " of " + data.total + " automated checks passed (manual AT/Daraja steps need dashboard confirmation).";
+        }
+        if (!list) return;
+        list.innerHTML = "";
+        (data.items || []).forEach(function (item) {
+          var li = document.createElement("li");
+          var mark = item.done ? "✓" : item.manual ? "○" : "✗";
+          li.textContent = mark + " " + item.label;
+          if (!item.done && item.how) {
+            var hint = document.createElement("span");
+            hint.className = "muted";
+            hint.style.display = "block";
+            hint.style.fontSize = "0.88rem";
+            hint.style.marginTop = "0.15rem";
+            hint.textContent = item.how;
+            li.appendChild(hint);
+          }
+          list.appendChild(li);
+        });
+      })
+      .catch(function () {});
   }
 
   function loadTables() {
@@ -770,6 +811,7 @@
       });
   });
 
+  loadSetupChecklist();
   loadTables();
 })();
     </script>

@@ -94,17 +94,103 @@
     var phoneEl = document.getElementById("contact-phone");
     var emailEl = document.getElementById("contact-email");
     var ussdEl = document.getElementById("ussd-dial");
-    if (phoneEl || emailEl || ussdEl) {
+    var contactHint = document.getElementById("contact-hint");
+    var noticesEl = document.getElementById("site-notices");
+    var noticesEmpty = document.getElementById("site-notices-empty");
+    var socialEl = document.getElementById("social-links");
+
+    function setContact(el, value, kind) {
+      if (!el) return;
+      el.textContent = "";
+      el.classList.remove("muted");
+      if (!value) {
+        el.textContent = "Office line coming soon";
+        el.classList.add("muted");
+        return;
+      }
+      if (kind === "phone") {
+        var a = document.createElement("a");
+        a.href = "tel:" + String(value).replace(/\s/g, "");
+        a.textContent = value;
+        el.appendChild(a);
+        return;
+      }
+      if (kind === "email") {
+        var mail = document.createElement("a");
+        mail.href = "mailto:" + value;
+        mail.textContent = value;
+        el.appendChild(mail);
+        return;
+      }
+      el.textContent = value;
+    }
+
+    function renderNotices(notices) {
+      if (!noticesEl || !noticesEmpty) return;
+      if (!notices || !notices.length) {
+        noticesEl.hidden = true;
+        noticesEmpty.hidden = false;
+        return;
+      }
+      noticesEl.innerHTML = "";
+      notices.forEach(function (text) {
+        var li = document.createElement("li");
+        li.textContent = text;
+        noticesEl.appendChild(li);
+      });
+      noticesEl.hidden = false;
+      noticesEmpty.hidden = true;
+    }
+
+    function renderSocial(social) {
+      if (!socialEl || !social) return;
+      var links = [];
+      if (social.facebook) {
+        links.push({ label: "Facebook", url: social.facebook });
+      }
+      if (social.instagram) {
+        links.push({ label: "Instagram", url: social.instagram });
+      }
+      if (social.linkedin) {
+        links.push({ label: "LinkedIn", url: social.linkedin });
+      }
+      if (!links.length) {
+        socialEl.hidden = true;
+        return;
+      }
+      socialEl.innerHTML = "";
+      links.forEach(function (item, idx) {
+        if (idx > 0) socialEl.appendChild(document.createTextNode(" · "));
+        var a = document.createElement("a");
+        a.href = item.url;
+        a.textContent = item.label;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        socialEl.appendChild(a);
+      });
+      socialEl.hidden = false;
+    }
+
+    if (phoneEl || emailEl || ussdEl || noticesEl || socialEl) {
       fetch("/api/config")
         .then(function (r) {
           return r.json();
         })
         .then(function (data) {
-          if (data.contactPhone && phoneEl) phoneEl.textContent = data.contactPhone;
-          if (data.contactEmail && emailEl) emailEl.textContent = data.contactEmail;
+          setContact(phoneEl, data.contactPhone, "phone");
+          setContact(emailEl, data.contactEmail, "email");
           if (data.ussdDial && ussdEl) ussdEl.textContent = data.ussdDial;
+          if (contactHint && data.contactPhone && data.contactEmail) {
+            contactHint.textContent =
+              "Call, email, or use the form below — choose the property so the right team sees your message.";
+          }
+          renderNotices(data.notices);
+          renderSocial(data.social);
         })
-        .catch(function () {});
+        .catch(function () {
+          setContact(phoneEl, "", "phone");
+          setContact(emailEl, "", "email");
+        });
     }
 
     var contactForm = document.getElementById("contact-form");

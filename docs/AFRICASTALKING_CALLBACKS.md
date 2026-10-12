@@ -33,11 +33,7 @@ When a message arrives, Render **Logs** will show `[AT incoming SMS] from=... te
 
 ### Sandbox (testing)
 
-1. Africa's Talking → **SMS** → **Sandbox** → **Phone numbers** / **Test numbers**
-2. Add your number: **`+254758981679`** (or `0758981679` if the form wants local format — prefer `+254…`)
-3. Save
-
-Without this, sandbox **will not** send OTP/reminders to your phone, and you may not receive test traffic correctly.
+Sandbox does **not** send SMS to a handset. Use the Africa's Talking simulator to test; there is no phone number to enter on the shortcode screen.
 
 ### Live
 
@@ -54,9 +50,9 @@ Admin test SMS uses the number you type in the admin form (e.g. `254758981679`).
 
 | Goal | What you need |
 |------|----------------|
-| **Send** OTP / reminders | `SMS_MOCK=0` + username + API key on Render |
+| **Send** OTP / reminders to real phones | `SMS_MOCK=0` + Live username/API key + account credit on Render |
 | **Receive** replies to shortcode | Inbox notification URL above |
-| **Test on your phone** | Add `+254758981679` under Sandbox test numbers |
+| **Test without a handset** | Use the Africa's Talking simulator with the Sandbox app |
 
 Notifications do **not** replace the API key. You still need both.
 
@@ -181,12 +177,12 @@ JUJO does not sell airtime yet — these just accept/log callbacks so the AT for
 | Key | Value |
 |-----|--------|
 | `SMS_MOCK` | `0` |
-| `AFRICASTALKING_USERNAME` | `sandbox` (or your live username) |
+| `AFRICASTALKING_USERNAME` | your **Live** username (not `sandbox`) |
 | `AFRICASTALKING_API_KEY` | your API key (never commit to Git) |
 | `AFRICASTALKING_SENDER` | empty until alphanumeric is approved |
 | `AFRICASTALKING_SHORTCODE` | `53154` (optional reference) |
 
-Sandbox: add test phones under AT → SMS → Sandbox numbers.
+Sandbox messages go to the Africa's Talking simulator, not a real phone. Use Live credentials, account credit, and an approved sender to text handsets.
 
 ---
 
@@ -194,7 +190,7 @@ Sandbox: add test phones under AT → SMS → Sandbox numbers.
 
 | Feature | Needed for OTP/reminders? |
 |---------|---------------------------|
-| Username + API key + `SMS_MOCK=0` | **Yes** |
+| Live username + API key + `SMS_MOCK=0` + account credit | **Yes** |
 | Inbox / delivery / opt-out | No (nice to have) |
 | Subscriptions + keyword | No |
 | USSD channel | No |

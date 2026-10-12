@@ -62,9 +62,11 @@ The whole app (pages + API + database) runs as one service on [Render](https://r
 | Admin  | `timothymuli76@gmail.com`  | Value you set for `ADMIN_PASSWORD` |
 | Tenant | `sam@mlolongo.demo` | `tenant123`                       |
 
-With `SMS_MOCK=1` (default on Render), registration shows the OTP on screen and in Render logs.
+On Render, registration activates an account after phone OTP verification when `REGISTRATION_AUTO_APPROVE=1`. For SMS to real phones, use Africa's Talking **Live** credentials; Sandbox only routes messages to its simulator.
 
-**Free tier notes:** the app may sleep after ~15 minutes with no visits (first load can be slow). SQLite data lives on the server disk until you redeploy.
+**Free tier notes:** the app may sleep after ~15 minutes with no visits (first load can be slow). Its filesystem is temporary, so SQLite records can be lost on sleep, restart, or redeploy. Set up durable database storage before relying on this for real tenant accounts or payments.
+
+For custom-domain purchase and setup, see [`docs/BUY_DOMAIN.md`](docs/BUY_DOMAIN.md). For real OTP SMS setup, use [`docs/RENDER_SMS_MPESA.md`](docs/RENDER_SMS_MPESA.md); Africa's Talking Sandbox only uses its simulator and does not send SMS to real phones.
 
 ## Vercel + Render (optional)
 
@@ -78,4 +80,4 @@ If you use **Vercel** for the website (`jujo-residence.vercel.app`) and **Render
 
 ## What’s not included
 
-Automatic M-Pesa STK push (Safaricom Daraja), email alerts, production session store (Redis), and HTTPS — add when you go live.
+Payment reconciliation requires registering the M-Pesa C2B callbacks in Daraja. Email alerts and a production session store are not configured yet.

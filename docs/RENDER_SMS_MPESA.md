@@ -6,12 +6,12 @@ Your terminal showed **SMS_MOCK is on** — that is why nothing reached the phon
 
 ### 1. Africa's Talking account
 1. Go to https://account.africastalking.com and sign up.
-2. Create an app (or open the default app).
+2. Create or open an app. **Sandbox is only for simulator testing; it does not send SMS to real phones.** For real tenant OTPs, switch to the **Live** environment/app.
 3. Copy:
    - **Username** (app username, often `sandbox` in sandbox)
    - **API Key** (Settings → API Key)
-4. **Sandbox only:** add your phone under **SMS → Sandbox → Test numbers** (e.g. `+254758981679`). Sandbox will not SMS numbers that are not on that list.
-5. **Live SMS:** leave sender empty at first, or use an approved **Alphanumeric sender**. Put credits on the account.
+4. **Sandbox:** test through the Africa's Talking simulator. It does not deliver to your handset.
+5. **Live SMS:** use the Live app username and API key, add account credit, and use an approved sender ID (or leave sender empty if AT allows a default sender).
 
 ### 2. Render environment
 1. Open https://dashboard.render.com → your service **jujo-residence**.
@@ -20,9 +20,9 @@ Your terminal showed **SMS_MOCK is on** — that is why nothing reached the phon
 | Key | Value |
 |-----|--------|
 | `SMS_MOCK` | `0` |
-| `AFRICASTALKING_USERNAME` | your AT username |
+| `AFRICASTALKING_USERNAME` | your **Live** AT app username (not `sandbox`) |
 | `AFRICASTALKING_API_KEY` | your AT API key |
-| `AFRICASTALKING_SENDER` | leave **empty** for sandbox |
+| `AFRICASTALKING_SENDER` | approved sender ID, or leave empty if AT allows a default sender |
 
 3. **Save** → wait for redeploy (or **Manual Deploy**).
 
@@ -32,10 +32,11 @@ Your terminal showed **SMS_MOCK is on** — that is why nothing reached the phon
 3. Use **Test rent reminder SMS** → phone `254758981679`  
 4. Check phone for the SMS.
 
-**Correct if:** message arrives, and Render **Logs** show `[SMS sent → +254758981679]`  
-**Wrong if:** Logs still say `[SMS mock` → `SMS_MOCK` is still `1`  
-**Wrong if:** Logs say keys missing → username/API key empty on Render  
-**Wrong if:** recipient error → number not on AT sandbox list, or no credit
+**Correct if:** message arrives on the handset and Render **Logs** show `[SMS sent → +254758981679]`.  
+**Sandbox:** use the AT simulator; it does not send to real phones.  
+**Wrong if:** Logs still say `[SMS mock` → `SMS_MOCK` is still `1`.  
+**Wrong if:** Logs say keys missing → username/API key empty on Render.  
+**Wrong if:** recipient error → check live account credit, sender approval, and phone format.
 
 Local check after keys are in a local `.env`:
 

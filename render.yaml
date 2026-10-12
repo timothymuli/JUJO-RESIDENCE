@@ -51,11 +51,11 @@ services:
       - key: SMS_MOCK
         value: "0"
       - key: AFRICASTALKING_USERNAME
-        value: sandbox
+        sync: false
       - key: AFRICASTALKING_API_KEY
         sync: false
       - key: AFRICASTALKING_SENDER
-        value: "JUJO"
+        value: ""
       - key: AFRICASTALKING_SHORTCODE
         value: "53154"
       - key: USSD_CHANNEL

@@ -60,7 +60,15 @@ function alertPhones() {
 function notifyOffice(text) {
   var msg = String(text || "").slice(0, 320);
   alertPhones().forEach(function (p) {
-    sendSms(p, msg).catch(function () {});
+    sendSms(p, msg)
+      .then(function (result) {
+        if (!result.ok) {
+          console.error("[Office alert SMS failed → " + p + "]", result.error);
+        }
+      })
+      .catch(function (err) {
+        console.error("[Office alert SMS failed → " + p + "]", err.message);
+      });
   });
 }
 
@@ -367,7 +375,9 @@ app.post("/api/contact", function (req, res) {
     "JUJO enquiry (" +
       (propertySlug || "general") +
       ") from " +
-      (name || email) +
+      (name || "visitor") +
+      ", " +
+      email +
       ": " +
       message.slice(0, 140)
   );
@@ -508,14 +518,21 @@ app.post("/api/auth/register/verify", registerLimiter, function (req, res) {
 
   db.prepare("DELETE FROM registration_otps WHERE id = ?").run(row.id);
 
+  const tenantProperty = db
+    .prepare("SELECT name FROM properties WHERE id = ?")
+    .get(row.property_id);
   notifyOffice(
     "JUJO new tenant: " +
       (row.full_name || row.email) +
-      " " +
+      ", " +
+      row.email +
+      ", " +
       phone +
-      " (" +
+      ", property " +
+      (tenantProperty ? tenantProperty.name : "unknown") +
+      ". Account " +
       auto +
-      "). Open the operations desk."
+      "."
   );
 
   res.json({
